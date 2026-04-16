@@ -1,0 +1,20 @@
+[project]
+name = "talent-pool"
+version = "0.1.0"
+description = "AI 简历人才库系统"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.7.0",
+    "python-dotenv>=1.0.1",
+    "sqlalchemy>=2.0.36",
+    "pymysql>=1.1.1",
+    "cryptography>=44.0.0",
+    "pymupdf>=1.25.1",
+    "anthropic>=0.42.0",
+    "chromadb>=0.5.23",
+    "apscheduler>=3.10.4",
+    "python-multipart>=0.0.20",
+]
