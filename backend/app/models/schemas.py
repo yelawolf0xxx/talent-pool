@@ -152,6 +152,11 @@ class RecycleBinResponse(BaseModel):
 
 # ── 上传 ──────────────────────────────────────────────────
 
+class UploadFailedItem(BaseModel):
+    filename: str = Field(description="文件名")
+    reason: str = Field(description="失败原因")
+
+
 class UploadResponse(BaseModel):
-    filename: str = Field(description="上传后的文件名")
-    path: str = Field(description="文件存储路径")
+    uploaded: list[str] = Field(description="成功上传的文件名列表")
+    failed: list[UploadFailedItem] = Field(default_factory=list, description="上传失败的文件列表")

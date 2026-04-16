@@ -106,16 +106,18 @@ export function getScanStatus() {
 // ── 上传 / 软删除 / 回收站 API ──────────────────────────
 
 /**
- * 上传简历文件
- * @param {File} file - 简历文件
- * @returns {Promise<import('axios').AxiosResponse<{ filename: string, path: string }>>}
+ * 批量上传简历文件
+ * @param {File[]} files - 简历文件列表
+ * @returns {Promise<import('axios').AxiosResponse<{ uploaded: string[], failed: { filename: string, reason: string }[] }>>}
  */
-export function uploadResume(file) {
+export function uploadResume(files) {
   const formData = new FormData()
-  formData.append('file', file)
+  for (const file of files) {
+    formData.append('files', file)
+  }
   return api.post('/api/upload', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
-    timeout: 60000,
+    timeout: 120000,
   })
 }
 

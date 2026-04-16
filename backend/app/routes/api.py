@@ -194,41 +194,47 @@ def get_recommendation(resume_id: int, query: str = Query(..., description="岗�
 # ── 软删除 / 回收站 ─────────────────────────────────────
 
 @router.post("/upload", response_model=UploadResponse)
-async def upload_resume(file: UploadFile = File(...)):
-    """上传简历文件到简历目录"""
-    import shutil
+async def upload_resume(files: list[UploadFile] = File(...)):
+    """批量上传简历文件到简历目录"""
     from datetime import datetime
     from pathlib import Path
 
     ALLOWED_EXTENSIONS = {".pdf", ".doc", ".docx", ".ppt", ".pptx"}
     MAX_SIZE = 20 * 1024 * 1024  # 20MB
 
-    ext = Path(file.filename).suffix.lower()
-    if ext not in ALLOWED_EXTENSIONS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"不支持的文件格式: {ext}，仅支持 {', '.join(sorted(ALLOWED_EXTENSIONS))}"
-        )
-
     from app.config import settings
     upload_dir = Path(settings.resume_dirs[0])
     upload_dir.mkdir(parents=True, exist_ok=True)
 
-    # 生成唯一文件名避免冲突
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    save_name = f"{timestamp}_{file.filename}"
-    save_path = upload_dir / save_name
+    uploaded = []
+    failed = []
 
-    # 读取并检查大小
-    content = await file.read()
-    if len(content) > MAX_SIZE:
-        raise HTTPException(status_code=400, detail="文件大小超过 20MB 限制")
+    for file in files:
+        ext = Path(file.filename).suffix.lower()
+        if ext not in ALLOWED_EXTENSIONS:
+            failed.append({"filename": file.filename, "reason": f"不支持的格式: {ext}"})
+            continue
 
-    with open(save_path, "wb") as f:
-        f.write(content)
+        # 生成唯一文件名避免冲突
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:19]
+        save_name = f"{timestamp}_{file.filename}"
+        save_path = upload_dir / save_name
 
-    logger.info("上传简历: %s -> %s", file.filename, save_path)
-    return UploadResponse(filename=save_name, path=str(save_path))
+        try:
+            content = await file.read()
+            if len(content) > MAX_SIZE:
+                failed.append({"filename": file.filename, "reason": "文件大小超过 20MB"})
+                continue
+
+            with open(save_path, "wb") as f:
+                f.write(content)
+
+            uploaded.append(save_name)
+            logger.info("上传简历: %s -> %s", file.filename, save_path)
+        except Exception as e:
+            failed.append({"filename": file.filename, "reason": str(e)})
+
+    return UploadResponse(uploaded=uploaded, failed=failed)
 
 
 @router.post("/resumes/delete")

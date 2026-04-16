@@ -9,6 +9,7 @@
           ref="uploadRef"
           type="file"
           accept=".pdf,.doc,.docx,.ppt,.pptx"
+          multiple
           style="display: none"
           @change="handleFileSelect"
         />
@@ -356,44 +357,62 @@ function clearSelection() {
 }
 
 /**
- * 处理文件选择与上传
+ * 处理文件选择与上传（支持多文件）
  */
 async function handleFileSelect(event) {
-  const files = event.target.files
-  if (!files || files.length === 0) return
+  const files = Array.from(event.target.files || [])
+  if (files.length === 0) return
 
-  const file = files[0]
-  const ext = '.' + file.name.split('.').pop().toLowerCase()
+  // 过滤有效文件
+  const validFiles = []
+  const invalidFiles = []
+  for (const file of files) {
+    const ext = '.' + file.name.split('.').pop().toLowerCase()
+    if (!ALLOWED_EXTENSIONS.includes(ext)) {
+      invalidFiles.push(file.name)
+    } else {
+      validFiles.push(file)
+    }
+  }
 
-  if (!ALLOWED_EXTENSIONS.includes(ext)) {
-    ElMessage.error(`不支持的文件格式: ${ext}，仅支持 ${ALLOWED_EXTENSIONS.join(', ')}`)
+  if (invalidFiles.length > 0) {
+    ElMessage.warning(`已忽略 ${invalidFiles.length} 个不支持格式的文件`)
+  }
+  if (validFiles.length === 0) {
     event.target.value = ''
     return
   }
 
   try {
     loading.value = true
-    const { data } = await uploadResume(file)
-    ElMessage.success(`简历 ${data.filename} 上传成功`)
+    const { data } = await uploadResume(validFiles)
 
-    // 弹出提示框询问是否立即更新人才库
-    try {
-      await ElMessageBox.confirm(
-        '简历已上传至目录，是否立即点击"更新人才库"进行解析？',
-        '上传成功',
-        { confirmButtonText: '立即解析', cancelButtonText: '稍后处理', type: 'success' }
-      )
-      // 用户点击"立即解析"，触发扫描
-      const { data: scanData } = await import('../api').then(m => m.manualScan())
-      if (scanData.status === 'running') {
-        ElMessage.info(scanData.message)
-      } else {
-        // 触发 App.vue 的扫描逻辑
-        ElMessage.success('扫描已启动，请稍后查看结果')
-        loadFirstPage()
+    // 构建上传结果摘要
+    let msg = `成功上传 ${data.uploaded.length} 份简历`
+    if (data.failed?.length > 0) {
+      msg += `，失败 ${data.failed.length} 份`
+    }
+
+    if (data.uploaded.length > 0) {
+      // 弹出提示框询问是否立即更新人才库
+      try {
+        await ElMessageBox.confirm(
+          `${msg}。\n\n是否立即点击"更新人才库"进行解析？`,
+          '上传完成',
+          { confirmButtonText: '立即解析', cancelButtonText: '稍后处理', type: 'success' }
+        )
+        const { data: scanData } = await import('../api').then(m => m.manualScan())
+        if (scanData.status === 'running') {
+          ElMessage.info(scanData.message)
+        } else {
+          ElMessage.success('扫描已启动，请稍后查看结果')
+          loadFirstPage()
+        }
+      } catch {
+        // 用户点击"稍后处理"
       }
-    } catch {
-      // 用户点击"稍后处理"，不做操作
+    } else {
+      ElMessage.error(msg + '，请检查文件格式')
     }
   } catch (e) {
     ElMessage.error('上传失败：' + (e.response?.data?.detail || e.message))
