@@ -10,6 +10,7 @@
           <el-menu mode="horizontal" :ellipsis="false" router>
             <el-menu-item index="/">简历搜索</el-menu-item>
             <el-menu-item index="/chat">AI 助手</el-menu-item>
+            <el-menu-item index="/recycle-bin">回收站</el-menu-item>
           </el-menu>
           <el-button
             type="primary"

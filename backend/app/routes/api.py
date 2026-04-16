@@ -6,7 +6,7 @@ import logging
 import threading
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from sqlalchemy.orm import Session
 
 from app.models.db import get_db
@@ -16,6 +16,8 @@ from app.models.schemas import (
     SearchRequest, SearchResponse, SearchResultItem,
     RecommendationResponse,
     ScanProgressResponse, ScanStartResponse,
+    BatchIdsRequest, RecycleBinItem, RecycleBinResponse,
+    UploadResponse,
 )
 from app.services import search as search_svc
 from app.services.ai import generate_recommendation
@@ -111,8 +113,8 @@ def list_resumes(
     limit: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
-    """列出所有已解析简历"""
-    resumes = db.query(Resume).offset(skip).limit(limit).all()
+    """列出所有已解析简历（排除已删除）"""
+    resumes = db.query(Resume).filter(Resume.is_deleted == False).offset(skip).limit(limit).all()
     results = []
     for r in resumes:
         file_record = db.query(ResumeFile).filter(ResumeFile.id == r.file_id).first()
@@ -187,3 +189,108 @@ def get_recommendation(resume_id: int, query: str = Query(..., description="岗�
         conclusion=result.get("conclusion", ""),
         reason=result.get("reason", ""),
     )
+
+
+# ── 软删除 / 回收站 ─────────────────────────────────────
+
+@router.post("/upload", response_model=UploadResponse)
+async def upload_resume(file: UploadFile = File(...)):
+    """上传简历文件到简历目录"""
+    import shutil
+    from datetime import datetime
+    from pathlib import Path
+
+    ALLOWED_EXTENSIONS = {".pdf", ".doc", ".docx", ".ppt", ".pptx"}
+    MAX_SIZE = 20 * 1024 * 1024  # 20MB
+
+    ext = Path(file.filename).suffix.lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"不支持的文件格式: {ext}，仅支持 {', '.join(sorted(ALLOWED_EXTENSIONS))}"
+        )
+
+    from app.config import settings
+    upload_dir = Path(settings.resume_dirs[0])
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    # 生成唯一文件名避免冲突
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    save_name = f"{timestamp}_{file.filename}"
+    save_path = upload_dir / save_name
+
+    # 读取并检查大小
+    content = await file.read()
+    if len(content) > MAX_SIZE:
+        raise HTTPException(status_code=400, detail="文件大小超过 20MB 限制")
+
+    with open(save_path, "wb") as f:
+        f.write(content)
+
+    logger.info("上传简历: %s -> %s", file.filename, save_path)
+    return UploadResponse(filename=save_name, path=str(save_path))
+
+
+@router.post("/resumes/delete")
+def batch_delete_resumes(req: BatchIdsRequest, db: Session = Depends(get_db)):
+    """批量软删除简历"""
+    from datetime import datetime
+    count = 0
+    for rid in req.ids:
+        r = db.query(Resume).filter(Resume.id == rid).first()
+        if r:
+            r.is_deleted = True
+            r.deleted_at = datetime.now()
+            count += 1
+    db.commit()
+    return {"deleted": count}
+
+
+@router.post("/resumes/restore")
+def batch_restore_resumes(req: BatchIdsRequest, db: Session = Depends(get_db)):
+    """批量恢复已删除的简历"""
+    count = 0
+    for rid in req.ids:
+        r = db.query(Resume).filter(Resume.id == rid).first()
+        if r and r.is_deleted:
+            r.is_deleted = False
+            r.deleted_at = None
+            count += 1
+    db.commit()
+    return {"restored": count}
+
+
+@router.get("/recycle-bin", response_model=RecycleBinResponse)
+def list_recycle_bin(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """列出回收站中的简历（已删除）"""
+    total = db.query(Resume).filter(Resume.is_deleted == True).count()
+    resumes = (
+        db.query(Resume)
+        .filter(Resume.is_deleted == True)
+        .order_by(Resume.deleted_at.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+    items = []
+    for r in resumes:
+        file_record = db.query(ResumeFile).filter(ResumeFile.id == r.file_id).first()
+        items.append(RecycleBinItem(
+            id=r.id,
+            name=r.name,
+            email=r.email,
+            phone=r.phone,
+            current_title=r.current_title,
+            years_exp=r.years_exp,
+            education=json.loads(r.education_json) if r.education_json else [],
+            skills=json.loads(r.skills_json) if r.skills_json else [],
+            work_experience=json.loads(r.work_exp_json) if r.work_exp_json else [],
+            summary_text=r.summary_text,
+            file_path=file_record.file_path if file_record else None,
+            deleted_at=r.deleted_at,
+        ))
+    return RecycleBinResponse(total=total, items=items)

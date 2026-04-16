@@ -4,6 +4,19 @@
       <h1>AI 简历人才库</h1>
       <p class="subtitle">智能搜索，精准匹配候选人</p>
 
+      <div class="hero-actions">
+        <input
+          ref="uploadRef"
+          type="file"
+          accept=".pdf,.doc,.docx,.ppt,.pptx"
+          style="display: none"
+          @change="handleFileSelect"
+        />
+        <el-button type="primary" @click="uploadRef?.click()">
+          <el-icon><Upload /></el-icon> 上传简历
+        </el-button>
+      </div>
+
       <el-card class="search-card">
         <el-form :model="form" @submit.prevent="handleSearch">
           <el-row :gutter="16">
@@ -59,6 +72,15 @@
     </div>
 
     <template v-else>
+      <!-- 批量操作栏 -->
+      <div v-if="selectedIds.length > 0" class="batch-actions">
+        <el-tag type="info" size="large">已选 {{ selectedIds.length }} 份简历</el-tag>
+        <el-button type="danger" @click="handleBatchDelete">
+          <el-icon><Delete /></el-icon> 批量删除
+        </el-button>
+        <el-button text @click="clearSelection">取消选择</el-button>
+      </div>
+
       <!-- 搜索结果 -->
       <div v-if="searched" class="search-results">
         <div class="results-header">
@@ -75,8 +97,19 @@
               <el-card
                 class="resume-card"
                 shadow="hover"
-                @click="$router.push(`/resume/${item.id}`)"
+                :class="{ selected: selectedIds.includes(item.id) }"
               >
+                <div class="card-checkbox">
+                  <el-checkbox
+                    v-model="selectedIds"
+                    :label="item.id"
+                    @click.stop
+                  />
+                </div>
+                <div
+                  class="card-content"
+                  @click="$router.push(`/resume/${item.id}`)"
+                >
                 <div class="card-header">
                   <el-avatar :size="48" style="background: #409eff">
                     {{ item.name?.charAt(0) || '?' }}
@@ -109,6 +142,7 @@
                   />
                   <span>匹配度 {{ Math.round(item.score * 100) }}%</span>
                 </div>
+                </div>
               </el-card>
             </el-col>
           </el-row>
@@ -128,8 +162,19 @@
               <el-card
                 class="resume-card"
                 shadow="hover"
-                @click="$router.push(`/resume/${item.id}`)"
+                :class="{ selected: selectedIds.includes(item.id) }"
               >
+                <div class="card-checkbox">
+                  <el-checkbox
+                    v-model="selectedIds"
+                    :label="item.id"
+                    @click.stop
+                  />
+                </div>
+                <div
+                  class="card-content"
+                  @click="$router.push(`/resume/${item.id}`)"
+                >
                 <div class="card-header">
                   <el-avatar :size="48" style="background: #409eff">
                     {{ item.name?.charAt(0) || '?' }}
@@ -156,6 +201,7 @@
                 <div v-if="item.summary_text" class="card-summary">
                   {{ item.summary_text }}
                 </div>
+                </div>
               </el-card>
             </el-col>
           </el-row>
@@ -175,8 +221,8 @@
 
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
-import { searchResumes, listResumes } from '../api'
-import { ElMessage } from 'element-plus'
+import { searchResumes, listResumes, deleteBatch, uploadResume } from '../api'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 const PAGE_SIZE = 20
 
@@ -191,6 +237,11 @@ const loading = ref(true)
 const loadingMore = ref(false)
 const searched = ref(false)
 const hasMore = ref(true)
+const selectedIds = ref([])
+const uploadRef = ref(null)
+
+// 支持的文件类型
+const ALLOWED_EXTENSIONS = ['.pdf', '.doc', '.docx', '.ppt', '.pptx']
 
 // 搜索结果（带分数和匹配原因）
 const searchResults = ref([])
@@ -276,12 +327,104 @@ function clearSearch() {
   searched.value = false
   searchResults.value = []
 }
+
+async function handleBatchDelete() {
+  if (selectedIds.value.length === 0) return
+  try {
+    await ElMessageBox.confirm(
+      `确定要将 ${selectedIds.value.length} 份简历移入回收站吗？删除后可在回收站中恢复。`,
+      '确认删除',
+      { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' }
+    )
+    const { data } = await deleteBatch(selectedIds.value)
+    ElMessage.success(`已删除 ${data.deleted} 份简历`)
+    clearSelection()
+    loadFirstPage()
+    if (searched.value) {
+      searched.value = false
+      searchResults.value = []
+    }
+  } catch (e) {
+    if (e !== 'cancel') {
+      ElMessage.error('删除失败：' + (e.response?.data?.detail || e.message))
+    }
+  }
+}
+
+function clearSelection() {
+  selectedIds.value = []
+}
+
+/**
+ * 处理文件选择与上传
+ */
+async function handleFileSelect(event) {
+  const files = event.target.files
+  if (!files || files.length === 0) return
+
+  const file = files[0]
+  const ext = '.' + file.name.split('.').pop().toLowerCase()
+
+  if (!ALLOWED_EXTENSIONS.includes(ext)) {
+    ElMessage.error(`不支持的文件格式: ${ext}，仅支持 ${ALLOWED_EXTENSIONS.join(', ')}`)
+    event.target.value = ''
+    return
+  }
+
+  try {
+    loading.value = true
+    const { data } = await uploadResume(file)
+    ElMessage.success(`简历 ${data.filename} 上传成功`)
+
+    // 弹出提示框询问是否立即更新人才库
+    try {
+      await ElMessageBox.confirm(
+        '简历已上传至目录，是否立即点击"更新人才库"进行解析？',
+        '上传成功',
+        { confirmButtonText: '立即解析', cancelButtonText: '稍后处理', type: 'success' }
+      )
+      // 用户点击"立即解析"，触发扫描
+      const { data: scanData } = await import('../api').then(m => m.manualScan())
+      if (scanData.status === 'running') {
+        ElMessage.info(scanData.message)
+      } else {
+        // 触发 App.vue 的扫描逻辑
+        ElMessage.success('扫描已启动，请稍后查看结果')
+        loadFirstPage()
+      }
+    } catch {
+      // 用户点击"稍后处理"，不做操作
+    }
+  } catch (e) {
+    ElMessage.error('上传失败：' + (e.response?.data?.detail || e.message))
+  } finally {
+    loading.value = false
+    event.target.value = ''
+  }
+}
 </script>
 
 <style scoped>
 .search-hero {
   text-align: center;
   margin-bottom: 32px;
+}
+
+.hero-actions {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.batch-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #fff;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .search-hero h1 {
@@ -329,6 +472,32 @@ function clearSearch() {
   margin-bottom: 12px;
 }
 
+.resume-card {
+  position: relative;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+
+.resume-card:hover {
+  transform: translateY(-2px);
+}
+
+.resume-card.selected {
+  border-color: #409eff;
+  box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.2);
+}
+
+.card-checkbox {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 1;
+}
+
+.card-content {
+  cursor: pointer;
+}
+
 .card-info h3 {
   margin: 0;
   font-size: 16px;
@@ -358,14 +527,6 @@ function clearSearch() {
   margin-top: 8px;
 }
 
-.resume-card {
-  cursor: pointer;
-  transition: transform 0.15s;
-}
-
-.resume-card:hover {
-  transform: translateY(-2px);
-}
 
 .match-score {
   display: flex;

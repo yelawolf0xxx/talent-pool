@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 from typing import Optional
 
 from sqlalchemy import or_
@@ -56,7 +57,7 @@ def search_resumes(db: Session, query: str, skills: Optional[list[str]] = None,
 
     最终结果按加权分数排序。
     """
-    all_resumes = db.query(Resume).all()
+    all_resumes = db.query(Resume).filter(Resume.is_deleted == False).all()
 
     # 应用筛选条件
     filtered = all_resumes
@@ -71,7 +72,6 @@ def search_resumes(db: Session, query: str, skills: Optional[list[str]] = None,
             if v is None:
                 return None
             s = str(v).strip()
-            import re
             m = re.match(r"(\d+)", s)
             return int(m.group(1)) if m else None
 
@@ -112,17 +112,18 @@ def search_resumes(db: Session, query: str, skills: Optional[list[str]] = None,
 
     # 3. 混合排序
     results = []
+    has_query = bool(query.strip())
     for r in filtered:
         kw_score = keyword_scores.get(r.id, 0.0)
         sem_score = semantic_scores.get(r.id, 0.0)
-        # 如果两个搜索都没命中，跳过
-        if kw_score == 0 and sem_score == 0:
+        # 无关键词查询时（纯筛选），直接使用筛选结果
+        if has_query and kw_score == 0 and sem_score == 0:
             continue
-        combined = kw_score * KEYWORD_WEIGHT + sem_score * SEMANTIC_WEIGHT
+        combined = kw_score * KEYWORD_WEIGHT + sem_score * SEMANTIC_WEIGHT if has_query else 0.0
         results.append(SearchResultItem(
             resume=_to_response(r),
             score=round(combined, 3),
-            match_reasons=_match_reasons(r, query),
+            match_reasons=_match_reasons(r, query) if has_query else [],
         ))
 
     results.sort(key=lambda x: x.score, reverse=True)

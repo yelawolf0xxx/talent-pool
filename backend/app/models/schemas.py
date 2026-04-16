@@ -121,3 +121,37 @@ class RecommendationResponse(BaseModel):
     score: int = Field(description="匹配度分数 0-100")
     conclusion: str = Field(description="一句话总结")
     reason: str = Field(description="详细分析说明")
+
+
+# ── 批量操作 ──────────────────────────────────────────────
+
+class BatchIdsRequest(BaseModel):
+    ids: list[int] = Field(description="简历 ID 列表")
+
+
+class RecycleBinItem(BaseModel):
+    """回收站中的简历"""
+    id: int
+    name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    current_title: Optional[str] = None
+    years_exp: Optional[int | str] = None
+    education: list[EducationItem] = Field(default_factory=list)
+    skills: list[str] = Field(default_factory=list)
+    work_experience: list[WorkExperienceItem] = Field(default_factory=list)
+    summary_text: Optional[str] = None
+    file_path: Optional[str] = None
+    deleted_at: Optional[datetime] = None
+
+
+class RecycleBinResponse(BaseModel):
+    total: int
+    items: list[RecycleBinItem]
+
+
+# ── 上传 ──────────────────────────────────────────────────
+
+class UploadResponse(BaseModel):
+    filename: str = Field(description="上传后的文件名")
+    path: str = Field(description="文件存储路径")

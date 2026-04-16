@@ -103,4 +103,48 @@ export function getScanStatus() {
   return api.get('/api/scan/status')
 }
 
+// ── 上传 / 软删除 / 回收站 API ──────────────────────────
+
+/**
+ * 上传简历文件
+ * @param {File} file - 简历文件
+ * @returns {Promise<import('axios').AxiosResponse<{ filename: string, path: string }>>}
+ */
+export function uploadResume(file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return api.post('/api/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 60000,
+  })
+}
+
+/**
+ * 批量软删除简历
+ * @param {number[]} ids - 简历 ID 列表
+ * @returns {Promise<import('axios').AxiosResponse<{ deleted: number }>>}
+ */
+export function deleteBatch(ids) {
+  return api.post('/api/resumes/delete', { ids })
+}
+
+/**
+ * 批量恢复已删除的简历
+ * @param {number[]} ids - 简历 ID 列表
+ * @returns {Promise<import('axios').AxiosResponse<{ restored: number }>>}
+ */
+export function restoreBatch(ids) {
+  return api.post('/api/resumes/restore', { ids })
+}
+
+/**
+ * 获取回收站中的简历列表
+ * @param {number} skip - 偏移量
+ * @param {number} limit - 每页数量
+ * @returns {Promise<import('axios').AxiosResponse<{ total: number, items: any[] }>>}
+ */
+export function listRecycleBin(skip = 0, limit = 20) {
+  return api.get('/api/recycle-bin', { params: { skip, limit } })
+}
+
 export default api
