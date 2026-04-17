@@ -49,6 +49,8 @@ def get_current_user(
             detail="无效或已过期的认证令牌",
         )
 
+    user_id = int(user_id)
+
     user = db.query(User).filter(User.id == user_id).first()
     if user is None or not user.is_active:
         raise HTTPException(

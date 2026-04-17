@@ -47,6 +47,9 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
         expires_delta or timedelta(hours=settings.jwt_expire_hours)
     )
     to_encode.update({"exp": expire})
+    # JWT sub 必须为字符串
+    if "sub" in to_encode:
+        to_encode["sub"] = str(to_encode["sub"])
     return jwt.encode(to_encode, settings.jwt_secret, algorithm="HS256")
 
 

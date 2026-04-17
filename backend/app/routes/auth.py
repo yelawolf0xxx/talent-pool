@@ -6,6 +6,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 from app.config import settings
 from app.middleware.auth import get_current_user, require_admin
@@ -287,7 +288,7 @@ def get_system_status(_: User = Depends(require_admin)):
     db = SessionLocal()
     try:
         try:
-            db.execute("SELECT 1")
+            db.execute(text("SELECT 1"))
             db_status = "connected"
         except Exception:
             db_status = "error"
