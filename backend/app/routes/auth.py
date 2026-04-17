@@ -16,7 +16,7 @@ from app.models.auth_models import (
     OperationLog,
     User,
 )
-from app.models.db import SessionLocal, engine
+from app.models.db import get_db, engine, SessionLocal
 from app.models.schemas import (
     EmailConfigRequest,
     EmailConfigResponse,
@@ -67,100 +67,80 @@ def _email_config_to_dict(cfg: EmailConfig) -> dict:
 # ── 认证端点（无需 Token）────────────────────────────────
 
 @router.post("/auth/register", response_model=UserResponse)
-def register(req: RegisterRequest, db: Session = Depends(SessionLocal)):
-    """注册新用户。
+def register(req: RegisterRequest, db: Session = Depends(get_db)):
+    """注册新用户"""
+    if len(req.password) < 6:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="密码长度不能少于 6 位",
+        )
 
-    校验用户名和邮箱唯一性，密码长度不低于 6 位。
-    默认角色为 user，状态为启用。
-    """
-    try:
-        if len(req.password) < 6:
+    existing = db.query(User).filter(
+        (User.username == req.username) | (User.email == req.email)
+    ).first()
+    if existing:
+        if existing.username == req.username:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="密码长度不能少于 6 位",
+                detail="用户名已被注册",
             )
-
-        # 检查用户名是否已存在
-        existing = db.query(User).filter(
-            (User.username == req.username) | (User.email == req.email)
-        ).first()
-        if existing:
-            if existing.username == req.username:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="用户名已被注册",
-                )
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="邮箱已被注册",
-            )
-
-        new_user = User(
-            username=req.username,
-            email=req.email,
-            password_hash=get_password_hash(req.password),
-            role="user",
-            is_active=True,
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="邮箱已被注册",
         )
-        db.add(new_user)
-        db.commit()
-        db.refresh(new_user)
 
-        log_operation(
-            db, new_user.id, "register", "user", new_user.id, "用户注册"
-        )
-        return new_user
-    finally:
-        db.close()
+    new_user = User(
+        username=req.username,
+        email=req.email,
+        password_hash=get_password_hash(req.password),
+        role="user",
+        is_active=True,
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    log_operation(db, new_user.id, "register", "user", new_user.id, "用户注册")
+    return new_user
 
 
 @router.post("/auth/login", response_model=LoginResponse)
-def login(req: LoginRequest, request: Request, db: Session = Depends(SessionLocal)):
-    """用户登录。
+def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
+    """用户登录，支持用户名或邮箱"""
+    ip_address = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent", "")
 
-    支持用户名或邮箱登录。成功返回 JWT token，失败返回 401。
-    被禁用的用户返回 403。
-    """
-    try:
-        ip_address = request.client.host if request.client else None
-        user_agent = request.headers.get("user-agent", "")
-
-        # 先检查用户是否存在且是否被禁用
-        candidate = (
-            db.query(User)
-            .filter(
-                (User.username == req.username_or_email)
-                | (User.email == req.username_or_email)
-            )
-            .first()
+    candidate = (
+        db.query(User)
+        .filter(
+            (User.username == req.username_or_email)
+            | (User.email == req.username_or_email)
         )
-        if candidate and not candidate.is_active:
+        .first()
+    )
+    if candidate and not candidate.is_active:
+        log_login(db, candidate.id, ip_address, user_agent, "failed")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="账号已被禁用，请联系管理员",
+        )
+
+    user = authenticate_user(db, req.username_or_email, req.password)
+    if not user:
+        if candidate:
             log_login(db, candidate.id, ip_address, user_agent, "failed")
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="账号已被禁用，请联系管理员",
-            )
-
-        user = authenticate_user(db, req.username_or_email, req.password)
-        if not user:
-            if candidate:
-                log_login(db, candidate.id, ip_address, user_agent, "failed")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="用户名或密码错误",
-            )
-
-        # 记录成功登录
-        log_login(db, user.id, ip_address, user_agent, "success")
-
-        token = create_access_token(data={"sub": user.id})
-        return LoginResponse(
-            access_token=token,
-            token_type="bearer",
-            user=_user_to_dict(user),
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="用户名或密码错误",
         )
-    finally:
-        db.close()
+
+    log_login(db, user.id, ip_address, user_agent, "success")
+    token = create_access_token(data={"sub": user.id})
+    return LoginResponse(
+        access_token=token,
+        token_type="bearer",
+        user=_user_to_dict(user),
+    )
 
 
 # ── 用户端点（需 Token）─────────────────────────────────
@@ -173,10 +153,7 @@ def get_me(current_user: User = Depends(get_current_user)):
 
 @router.post("/auth/logout")
 def logout(current_user: User = Depends(get_current_user)):
-    """退出登录。
-
-    前端清除 token 即可，后端返回成功消息。
-    """
+    """退出登录"""
     return {"message": "退出成功"}
 
 
@@ -187,20 +164,17 @@ def list_users(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     _: User = Depends(require_admin),
-    db: Session = Depends(SessionLocal),
+    db: Session = Depends(get_db),
 ):
-    """分页获取用户列表（不包含密码）"""
-    try:
-        total = db.query(User).count()
-        users = db.query(User).order_by(User.id).offset(skip).limit(limit).all()
-        return {
-            "total": total,
-            "items": [_user_to_dict(u) for u in users],
-            "skip": skip,
-            "limit": limit,
-        }
-    finally:
-        db.close()
+    """分页获取用户列表"""
+    total = db.query(User).count()
+    users = db.query(User).order_by(User.id).offset(skip).limit(limit).all()
+    return {
+        "total": total,
+        "items": [_user_to_dict(u) for u in users],
+        "skip": skip,
+        "limit": limit,
+    }
 
 
 @router.patch("/admin/users/{user_id}", response_model=UserResponse)
@@ -208,42 +182,35 @@ def update_user(
     user_id: int,
     req: UpdateUserRequest,
     _: User = Depends(require_admin),
-    db: Session = Depends(SessionLocal),
+    db: Session = Depends(get_db),
 ):
-    """更新用户角色或启用状态（部分更新）"""
-    try:
-        user = db.query(User).filter(User.id == user_id).first()
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="用户不存在",
-            )
-
-        if req.role is not None:
-            if req.role not in ("admin", "user"):
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="角色只能是 admin 或 user",
-                )
-            user.role = req.role
-
-        if req.is_active is not None:
-            user.is_active = req.is_active
-
-        db.commit()
-        db.refresh(user)
-
-        log_operation(
-            db,
-            user.id,
-            "update_user",
-            "user",
-            user.id,
-            f"更新用户信息: role={user.role}, is_active={user.is_active}",
+    """更新用户角色或启用状态"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="用户不存在",
         )
-        return user
-    finally:
-        db.close()
+
+    if req.role is not None:
+        if req.role not in ("admin", "user"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="角色只能是 admin 或 user",
+            )
+        user.role = req.role
+
+    if req.is_active is not None:
+        user.is_active = req.is_active
+
+    db.commit()
+    db.refresh(user)
+
+    log_operation(
+        db, user.id, "update_user", "user", user.id,
+        f"更新用户信息: role={user.role}, is_active={user.is_active}",
+    )
+    return user
 
 
 @router.get("/admin/login-logs")
@@ -252,33 +219,30 @@ def list_login_logs(
     limit: int = Query(20, ge=1, le=100),
     user_id: Optional[int] = Query(None),
     _: User = Depends(require_admin),
-    db: Session = Depends(SessionLocal),
+    db: Session = Depends(get_db),
 ):
-    """分页获取登录日志，按时间降序"""
-    try:
-        query = db.query(LoginLog)
-        if user_id is not None:
-            query = query.filter(LoginLog.user_id == user_id)
-        total = query.count()
-        logs = query.order_by(LoginLog.created_at.desc()).offset(skip).limit(limit).all()
-        return {
-            "total": total,
-            "items": [
-                {
-                    "id": log.id,
-                    "user_id": log.user_id,
-                    "ip_address": log.ip_address,
-                    "user_agent": log.user_agent,
-                    "status": log.status,
-                    "created_at": log.created_at,
-                }
-                for log in logs
-            ],
-            "skip": skip,
-            "limit": limit,
-        }
-    finally:
-        db.close()
+    """分页获取登录日志"""
+    query = db.query(LoginLog)
+    if user_id is not None:
+        query = query.filter(LoginLog.user_id == user_id)
+    total = query.count()
+    logs = query.order_by(LoginLog.created_at.desc()).offset(skip).limit(limit).all()
+    return {
+        "total": total,
+        "items": [
+            {
+                "id": log.id,
+                "user_id": log.user_id,
+                "ip_address": log.ip_address,
+                "user_agent": log.user_agent,
+                "status": log.status,
+                "created_at": log.created_at,
+            }
+            for log in logs
+        ],
+        "skip": skip,
+        "limit": limit,
+    }
 
 
 @router.get("/admin/operation-logs")
@@ -288,44 +252,40 @@ def list_operation_logs(
     user_id: Optional[int] = Query(None),
     action: Optional[str] = Query(None),
     _: User = Depends(require_admin),
-    db: Session = Depends(SessionLocal),
+    db: Session = Depends(get_db),
 ):
-    """分页获取操作日志，按时间降序"""
-    try:
-        query = db.query(OperationLog)
-        if user_id is not None:
-            query = query.filter(OperationLog.user_id == user_id)
-        if action is not None:
-            query = query.filter(OperationLog.action == action)
-        total = query.count()
-        logs = query.order_by(OperationLog.created_at.desc()).offset(skip).limit(limit).all()
-        return {
-            "total": total,
-            "items": [
-                {
-                    "id": log.id,
-                    "user_id": log.user_id,
-                    "action": log.action,
-                    "resource_type": log.resource_type,
-                    "resource_id": log.resource_id,
-                    "detail": log.detail,
-                    "created_at": log.created_at,
-                }
-                for log in logs
-            ],
-            "skip": skip,
-            "limit": limit,
-        }
-    finally:
-        db.close()
+    """分页获取操作日志"""
+    query = db.query(OperationLog)
+    if user_id is not None:
+        query = query.filter(OperationLog.user_id == user_id)
+    if action is not None:
+        query = query.filter(OperationLog.action == action)
+    total = query.count()
+    logs = query.order_by(OperationLog.created_at.desc()).offset(skip).limit(limit).all()
+    return {
+        "total": total,
+        "items": [
+            {
+                "id": log.id,
+                "user_id": log.user_id,
+                "action": log.action,
+                "resource_type": log.resource_type,
+                "resource_id": log.resource_id,
+                "detail": log.detail,
+                "created_at": log.created_at,
+            }
+            for log in logs
+        ],
+        "skip": skip,
+        "limit": limit,
+    }
 
 
 @router.get("/admin/system-status")
 def get_system_status(_: User = Depends(require_admin)):
-    """获取系统状态信息"""
+    """获取系统运行状态"""
     db = SessionLocal()
     try:
-        # 数据库连接检查
         try:
             db.execute("SELECT 1")
             db_status = "connected"
@@ -334,17 +294,14 @@ def get_system_status(_: User = Depends(require_admin)):
 
         total_users = db.query(User).count()
 
-        # 简历总数（从 resume_models 导入）
         from app.models.resume_models import Resume
         total_resumes = db.query(Resume).filter(Resume.is_deleted == False).count()
 
-        # 扫描状态（从 main 模块获取锁状态）
         from app.main import acquire_scan_lock, release_scan_lock
         scan_active = not acquire_scan_lock()
         if not scan_active:
             release_scan_lock()
 
-        # 系统运行时长
         from app.main import _startup_time
         delta = datetime.now() - _startup_time
         hours = int(delta.total_seconds() // 3600)
@@ -371,131 +328,90 @@ def get_system_status(_: User = Depends(require_admin)):
 # ── 邮箱配置管理（需 Admin）─────────────────────────────
 
 @router.get("/admin/email-configs")
-def list_email_configs(_: User = Depends(require_admin), db: Session = Depends(SessionLocal)):
+def list_email_configs(
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
     """获取邮箱配置列表"""
-    try:
-        configs = db.query(EmailConfig).order_by(EmailConfig.id).all()
-        return [_email_config_to_dict(c) for c in configs]
-    finally:
-        db.close()
+    configs = db.query(EmailConfig).order_by(EmailConfig.id).all()
+    return [_email_config_to_dict(c) for c in configs]
 
 
 @router.post("/admin/email-configs", response_model=EmailConfigResponse)
 def create_email_config(
     req: EmailConfigRequest,
     _: User = Depends(require_admin),
-    db: Session = Depends(SessionLocal),
+    db: Session = Depends(get_db),
 ):
-    """创建或更新邮箱配置。
+    """创建或更新邮箱配置"""
+    existing = db.query(EmailConfig).filter(
+        EmailConfig.email_address == req.email_address
+    ).first()
 
-    密码以明文传入，后端使用 get_password_hash 加密后存储。
-    同一 email_address 只允许存在一条配置，存在时执行更新。
-    """
-    try:
-        existing = db.query(EmailConfig).filter(
-            EmailConfig.email_address == req.email_address
-        ).first()
-
-        if existing:
-            existing.imap_server = req.imap_server
-            existing.imap_port = req.imap_port
-            existing.password_encrypted = get_password_hash(req.password)
-            if req.download_dir is not None:
-                existing.download_dir = req.download_dir
-            db.commit()
-            db.refresh(existing)
-            log_operation(
-                db,
-                existing.id,
-                "update_email_config",
-                "email_config",
-                existing.id,
-                "更新邮箱配置",
-            )
-            return existing
-        else:
-            new_cfg = EmailConfig(
-                imap_server=req.imap_server,
-                imap_port=req.imap_port,
-                email_address=req.email_address,
-                password_encrypted=get_password_hash(req.password),
-                download_dir=req.download_dir,
-                is_enabled=True,
-            )
-            db.add(new_cfg)
-            db.commit()
-            db.refresh(new_cfg)
-            log_operation(
-                db,
-                new_cfg.id,
-                "create_email_config",
-                "email_config",
-                new_cfg.id,
-                "创建邮箱配置",
-            )
-            return new_cfg
-    finally:
-        db.close()
+    if existing:
+        existing.imap_server = req.imap_server
+        existing.imap_port = req.imap_port
+        existing.password_encrypted = get_password_hash(req.password)
+        if req.download_dir is not None:
+            existing.download_dir = req.download_dir
+        db.commit()
+        db.refresh(existing)
+        log_operation(db, existing.id, "update_email_config", "email_config", existing.id, "更新邮箱配置")
+        return existing
+    else:
+        new_cfg = EmailConfig(
+            imap_server=req.imap_server,
+            imap_port=req.imap_port,
+            email_address=req.email_address,
+            password_encrypted=get_password_hash(req.password),
+            download_dir=req.download_dir,
+            is_enabled=True,
+        )
+        db.add(new_cfg)
+        db.commit()
+        db.refresh(new_cfg)
+        log_operation(db, new_cfg.id, "create_email_config", "email_config", new_cfg.id, "创建邮箱配置")
+        return new_cfg
 
 
 @router.delete("/admin/email-configs/{config_id}")
 def delete_email_config(
     config_id: int,
     _: User = Depends(require_admin),
-    db: Session = Depends(SessionLocal),
+    db: Session = Depends(get_db),
 ):
     """删除邮箱配置"""
-    try:
-        cfg = db.query(EmailConfig).filter(EmailConfig.id == config_id).first()
-        if not cfg:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="配置不存在",
-            )
-        db.delete(cfg)
-        db.commit()
-        log_operation(
-            db,
-            config_id,
-            "delete_email_config",
-            "email_config",
-            config_id,
-            "删除邮箱配置",
+    cfg = db.query(EmailConfig).filter(EmailConfig.id == config_id).first()
+    if not cfg:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="配置不存在",
         )
-        return {"message": "配置已删除"}
-    finally:
-        db.close()
+    db.delete(cfg)
+    db.commit()
+    log_operation(db, config_id, "delete_email_config", "email_config", config_id, "删除邮箱配置")
+    return {"message": "配置已删除"}
 
 
 @router.post("/admin/email-sync/{config_id}")
 def trigger_email_sync(
     config_id: int,
     _: User = Depends(require_admin),
-    db: Session = Depends(SessionLocal),
+    db: Session = Depends(get_db),
 ):
     """手动触发邮箱同步"""
-    try:
-        cfg = db.query(EmailConfig).filter(EmailConfig.id == config_id).first()
-        if not cfg:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="配置不存在",
-            )
-
-        from app.services.email_sync import sync_emails
-        result = sync_emails(config_id)
-
-        log_operation(
-            db,
-            config_id,
-            "trigger_email_sync",
-            "email_config",
-            config_id,
-            f"手动触发同步: {result}",
+    cfg = db.query(EmailConfig).filter(EmailConfig.id == config_id).first()
+    if not cfg:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="配置不存在",
         )
-        return result
-    finally:
-        db.close()
+
+    from app.services.email_sync import sync_emails
+    result = sync_emails(config_id)
+
+    log_operation(db, config_id, "trigger_email_sync", "email_config", config_id, f"手动触发同步: {result}")
+    return result
 
 
 @router.get("/admin/email-sync-logs")
@@ -503,36 +419,33 @@ def list_email_sync_logs(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     _: User = Depends(require_admin),
-    db: Session = Depends(SessionLocal),
+    db: Session = Depends(get_db),
 ):
-    """分页获取邮箱同步日志，按时间降序"""
-    try:
-        total = db.query(EmailSyncLog).count()
-        logs = (
-            db.query(EmailSyncLog)
-            .order_by(EmailSyncLog.created_at.desc())
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
-        return {
-            "total": total,
-            "items": [
-                {
-                    "id": log.id,
-                    "email_config_id": log.email_config_id,
-                    "total_emails": log.total_emails,
-                    "new_attachments": log.new_attachments,
-                    "downloaded": log.downloaded,
-                    "failed": log.failed,
-                    "status": log.status,
-                    "message": log.message,
-                    "created_at": log.created_at,
-                }
-                for log in logs
-            ],
-            "skip": skip,
-            "limit": limit,
-        }
-    finally:
-        db.close()
+    """分页获取邮箱同步日志"""
+    total = db.query(EmailSyncLog).count()
+    logs = (
+        db.query(EmailSyncLog)
+        .order_by(EmailSyncLog.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+    return {
+        "total": total,
+        "items": [
+            {
+                "id": log.id,
+                "email_config_id": log.email_config_id,
+                "total_emails": log.total_emails,
+                "new_attachments": log.new_attachments,
+                "downloaded": log.downloaded,
+                "failed": log.failed,
+                "status": log.status,
+                "message": log.message,
+                "created_at": log.created_at,
+            }
+            for log in logs
+        ],
+        "skip": skip,
+        "limit": limit,
+    }
