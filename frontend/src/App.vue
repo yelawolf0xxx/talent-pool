@@ -12,16 +12,38 @@
             <el-menu-item index="/chat">AI 助手</el-menu-item>
             <el-menu-item index="/recycle-bin">回收站</el-menu-item>
           </el-menu>
-          <el-button
-            type="primary"
-            :loading="scanning"
-            :disabled="scanning"
-            @click="handleScan"
-            style="margin-left: auto"
-          >
-            <el-icon><Refresh /></el-icon>
-            更新人才库
-          </el-button>
+
+          <!-- 右侧用户区域 -->
+          <div class="user-area">
+            <!-- 管理员可见：更新人才库 -->
+            <el-button
+              v-if="authStore.isAdmin"
+              type="primary"
+              :loading="scanning"
+              :disabled="scanning"
+              @click="handleScan"
+            >
+              <el-icon><Refresh /></el-icon>
+              更新人才库
+            </el-button>
+
+            <!-- 未登录：显示登录/注册 -->
+            <template v-if="!authStore.isLoggedIn">
+              <el-button @click="$router.push('/login')">登录</el-button>
+              <el-button type="primary" @click="$router.push('/register')">注册</el-button>
+            </template>
+
+            <!-- 已登录：显示用户菜单 -->
+            <el-dropdown v-else @command="handleUserCommand">
+              <span class="user-name">{{ authStore.user?.username || '用户' }}</span>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item v-if="authStore.isAdmin" command="admin">管理后台</el-dropdown-item>
+                  <el-dropdown-item command="logout">退出登录</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+          </div>
         </div>
       </el-header>
       <el-main>
@@ -63,8 +85,12 @@
 
 <script setup>
 import { ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { manualScan, getScanStatus } from './api'
 import { ElMessage } from 'element-plus'
+import authStore from './stores/auth'
+
+const router = useRouter()
 
 const scanning = ref(false)
 const showProgress = ref(false)
@@ -83,6 +109,20 @@ const percent = computed(() => {
 
 let pollTimer = null
 
+/**
+ * 处理用户下拉菜单命令
+ */
+function handleUserCommand(command) {
+  if (command === 'admin') {
+    router.push('/admin')
+  } else if (command === 'logout') {
+    authStore.logout()
+  }
+}
+
+/**
+ * 处理扫描
+ */
 async function handleScan() {
   if (scanning.value) return
   scanning.value = true
@@ -146,6 +186,19 @@ body {
   align-items: center;
   height: 100%;
   gap: 24px;
+}
+
+.user-area {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.user-name {
+  color: #409eff;
+  cursor: pointer;
+  font-size: 14px;
 }
 
 .logo {

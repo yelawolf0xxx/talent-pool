@@ -1,6 +1,33 @@
 # AI 简历人才库系统
 
-> 自动扫描 PDF/DOC/PPT 简历目录，使用 AI 提取结构化信息，存储到 MySQL 数据库，通过 ChromaDB 向量库实现语义搜索，并提供简历管理、岗位匹配分析和 AI 对话功能。
+> 自动扫描 PDF/DOC/PPT 简历目录，使用 AI 提取结构化信息，存储到 MySQL 数据库，通过 ChromaDB 向量库实现语义搜索，并提供简历管理、岗位匹配分析和 AI 对话功能。支持账号认证、管理员后台和邮箱自动抓取简历。
+
+## 更新记录
+
+### 2026-04-17 — 账号系统 + 管理员端 + 邮箱自动抓取
+
+**新增功能：**
+
+- **账号认证系统**：用户注册/登录，JWT Token 认证，bcrypt 密码加密
+- **角色权限分权**：管理员（Admin）和普通用户（User）两种角色
+- **管理员面板**：用户管理、登录日志、操作日志、系统状态监控、邮箱配置
+- **邮箱自动抓取**：IMAP 定时扫描邮箱，提取附件简历，按日期分类下载至网络路径
+- **操作审计**：所有关键操作（上传、删除、恢复、扫描）均记录操作日志
+- **登录审计**：所有登录尝试（成功/失败）均记录登录日志
+
+**新增数据库表：** `users`、`login_logs`、`operation_logs`、`email_configs`、`email_sync_logs`
+
+**新增环境变量：** `JWT_SECRET`、`JWT_EXPIRE_HOURS`、`EMAIL_SYNC_INTERVAL`、`EMAIL_ENCRYPTION_KEY`
+
+**新增依赖：** `python-jose[cryptography]`、`bcrypt`、`passlib[bcrypt]`、`cryptography`
+
+### 2026-04-16 — 批量上传 + 软删除/回收站 + 搜索修复
+
+- 批量多选上传简历文件
+- 软删除 + 回收站 + 批量恢复
+- 修复按技能筛选和最低年限筛选的搜索 bug
+
+---
 
 ## 功能特性
 
@@ -11,6 +38,10 @@
 - **岗位匹配分析**：输入岗位需求描述，AI 生成匹配度评分和推荐理由
 - **AI 对话**：针对特定候选人进行多轮对话，深入了解候选人背景
 - **多目录支持**：可同时监控多个简历存放目录
+- **账号认证**：JWT Token 认证，支持用户名/邮箱登录
+- **权限分权**：管理员可管理用户、查看日志、配置邮箱抓取
+- **邮箱自动抓取**：IMAP 定时扫描，自动提取邮件附件简历
+- **操作审计**：关键操作自动记录日志，支持管理员追溯
 
 ## 技术栈
 
@@ -147,7 +178,202 @@ app/
 | resume_id | INT | 关联的简历 ID |
 | created_at | DATETIME | 创建时间 |
 
+### users（用户账号表）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | INT PK | 自增主键 |
+| username | VARCHAR(50) UNIQUE | 用户名 |
+| email | VARCHAR(200) UNIQUE | 邮箱 |
+| password_hash | VARCHAR(255) | bcrypt 加密密码 |
+| role | VARCHAR(20) | 角色: admin/user |
+| is_active | BOOLEAN | 是否启用 |
+| created_at | DATETIME | 注册时间 |
+| updated_at | DATETIME | 更新时间 |
+
+索引: `idx_username`, `idx_email`
+
+### login_logs（登录日志表）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | INT PK | 自增主键 |
+| user_id | INT FK → users.id | 关联用户 |
+| ip_address | VARCHAR(45) | 登录 IP |
+| user_agent | VARCHAR(500) | 浏览器/设备信息 |
+| status | VARCHAR(20) | success/failed |
+| created_at | DATETIME | 登录时间 |
+
+索引: `idx_user_id`, `idx_created_at`
+
+### operation_logs（操作日志表）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | INT PK | 自增主键 |
+| user_id | INT FK → users.id | 操作用户 |
+| action | VARCHAR(100) | 操作类型 |
+| resource_type | VARCHAR(50) | 资源类型 |
+| resource_id | INT | 资源 ID |
+| detail | TEXT | 操作详情 JSON |
+| created_at | DATETIME | 操作时间 |
+
+索引: `idx_user_id`, `idx_created_at`
+
+### email_configs（邮箱配置表）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | INT PK | 自增主键 |
+| imap_server | VARCHAR(200) | IMAP 服务器地址 |
+| imap_port | INT | IMAP 端口，默认 993 |
+| email_address | VARCHAR(200) | 邮箱地址 |
+| password_encrypted | VARCHAR(500) | 加密后的授权码 |
+| is_enabled | BOOLEAN | 是否启用 |
+| download_dir | VARCHAR(512) | 下载目录（UNC 路径备份） |
+| last_sync_at | DATETIME | 上次同步时间 |
+| created_at | DATETIME | 创建时间 |
+
+### email_sync_logs（邮箱同步日志表）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | INT PK | 自增主键 |
+| email_config_id | INT FK → email_configs.id | 关联配置 |
+| total_emails | INT | 扫描邮件总数 |
+| new_attachments | INT | 新附件数量 |
+| downloaded | INT | 成功下载数量 |
+| failed | INT | 失败数量 |
+| status | VARCHAR(20) | success/failed/partial |
+| message | TEXT | 执行详情 |
+| created_at | DATETIME | 同步时间 |
+
+---
+
 ## API 参考
+
+### 认证
+
+**用户注册**
+
+```
+POST /api/auth/register
+Content-Type: application/json
+
+{"username": "zhangsan", "email": "zhang@example.com", "password": "123456"}
+```
+
+返回: `{"id": 1, "username": "zhangsan", "email": "zhang@example.com", "role": "user"}`
+
+**用户登录**
+
+```
+POST /api/auth/login
+Content-Type: application/json
+
+{"username_or_email": "zhangsan", "password": "123456"}
+```
+
+返回:
+```json
+{
+  "access_token": "eyJ...",
+  "token_type": "bearer",
+  "user": {"id": 1, "username": "zhangsan", "email": "zhang@example.com", "role": "user"}
+}
+```
+
+**获取当前用户**（需 Token）
+
+```
+GET /api/auth/me
+Authorization: Bearer <token>
+```
+
+**退出登录**
+
+```
+POST /api/auth/logout
+```
+
+### 管理员 API（需 Admin 角色）
+
+**用户列表**
+
+```
+GET /api/admin/users?skip=0&limit=20
+```
+
+**编辑用户**
+
+```
+PATCH /api/admin/users/{id}
+Content-Type: application/json
+
+{"is_active": false}  或  {"role": "admin"}
+```
+
+**登录日志**
+
+```
+GET /api/admin/login-logs?skip=0&limit=50&user_id=1
+```
+
+**操作日志**
+
+```
+GET /api/admin/operation-logs?skip=0&limit=50&user_id=1&action=upload_resume
+```
+
+**系统状态**
+
+```
+GET /api/admin/system-status
+```
+
+返回:
+```json
+{
+  "database": "connected",
+  "total_users": 5,
+  "total_resumes": 120,
+  "scan_active": false,
+  "uptime": "2d 5h 30m"
+}
+```
+
+**邮箱配置列表**
+
+```
+GET /api/admin/email-configs
+```
+
+**创建/更新邮箱配置**
+
+```
+POST /api/admin/email-configs
+Content-Type: application/json
+
+{
+  "imap_server": "imap.example.com",
+  "imap_port": 993,
+  "email_address": "hr@example.com",
+  "password": "your_authorization_code",
+  "download_dir": "\\\\192.168.3.30\\简历资料夹"
+}
+```
+
+**手动触发邮箱同步**
+
+```
+POST /api/admin/email-sync/{config_id}
+```
+
+**同步日志**
+
+```
+GET /api/admin/email-sync-logs?skip=0&limit=20
+```
 
 ### 健康检查
 
@@ -474,6 +700,10 @@ npm run build
 | `ANTHROPIC_MODEL` | `claude-sonnet-4-6-20251014` | AI 模型名称 |
 | `RESUME_DIR` | `./resumes` | 简历目录路径（逗号分隔支持多目录） |
 | `SCAN_INTERVAL` | `300` | 定时扫描间隔（秒） |
+| `JWT_SECRET` | `change-me` | JWT 签名密钥（生产环境务必修改） |
+| `JWT_EXPIRE_HOURS` | `24` | Token 有效期（小时） |
+| `EMAIL_SYNC_INTERVAL` | `86400` | 邮箱同步间隔（秒），默认 24 小时 |
+| `EMAIL_ENCRYPTION_KEY` | 自动生成 | Fernet 加密密钥，用于加密邮箱密码 |
 | `log_level` | `INFO` | 日志级别 |
 | `log_format` | `%(asctime)s - ...` | 日志格式 |
 
@@ -582,12 +812,15 @@ ChromaDB 向量索引管理。
 
 ### 路由
 
-| 路径 | 组件 | 说明 |
-|------|------|------|
-| `/` | HomeView | 首页：简历列表、搜索、筛选、批量删除、上传简历 |
-| `/resume/:id` | DetailView | 简历详情、岗位匹配推荐 |
-| `/chat` | ChatView | AI 对话界面 |
-| `/recycle-bin` | RecycleBinView | 回收站：查看已删除简历、批量恢复 |
+| 路径 | 组件 | 权限 | 说明 |
+|------|------|------|------|
+| `/login` | LoginView | 访客 | 登录页面 |
+| `/register` | RegisterView | 访客 | 注册页面 |
+| `/` | HomeView | 需登录 | 首页：简历列表、搜索、筛选、上传、批量删除 |
+| `/resume/:id` | DetailView | 需登录 | 简历详情、岗位匹配推荐 |
+| `/chat` | ChatView | 需登录 | AI 对话界面 |
+| `/recycle-bin` | RecycleBinView | 需管理员 | 回收站：查看已删除简历、批量恢复 |
+| `/admin` | AdminView | 需管理员 | 管理后台：用户管理、日志、系统状态、邮箱配置 |
 
 ### 代理配置
 
@@ -688,6 +921,26 @@ ChromaDB 需要下载 embedding 模型，首次运行时会自动下载。如果
 - 目录中是否有 PDF/DOCX/PPTX 文件
 - 文件是否已被处理过（SHA256 哈希未变更）
 - 查看后端日志输出
+
+**Q: 默认管理员账号是什么？**
+
+系统首次启动时会自动创建默认管理员账号：
+- 用户名: `admin`
+- 密码: `admin123`
+
+**请立即修改默认密码。** 启动后使用管理员权限在管理后台修改密码。
+
+**Q: 邮箱抓取不工作**
+
+检查：
+- IMAP 服务器地址和端口是否正确
+- 邮箱授权码是否有效（非登录密码）
+- 邮箱配置是否已启用（`is_enabled = true`）
+- 查看 `/api/admin/email-sync-logs` 中的同步日志
+
+**Q: Token 过期怎么办？**
+
+Token 默认有效期 24 小时（可通过 `JWT_EXPIRE_HOURS` 调整）。过期后需重新登录。前端会在收到 401 响应时自动清除 token 并跳转登录页。
 
 ## License
 

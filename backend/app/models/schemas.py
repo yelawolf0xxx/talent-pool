@@ -160,3 +160,58 @@ class UploadFailedItem(BaseModel):
 class UploadResponse(BaseModel):
     uploaded: list[str] = Field(description="成功上传的文件名列表")
     failed: list[UploadFailedItem] = Field(default_factory=list, description="上传失败的文件列表")
+
+
+# ── 认证 ──────────────────────────────────────────────────
+
+class RegisterRequest(BaseModel):
+    username: str
+    email: str
+    password: str
+
+
+class LoginRequest(BaseModel):
+    username_or_email: str
+    password: str
+
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str
+    user: dict
+
+
+class UserResponse(BaseModel):
+    id: int
+    username: str
+    email: str
+    role: str
+    is_active: bool
+    created_at: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
+
+
+class UpdateUserRequest(BaseModel):
+    role: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class EmailConfigRequest(BaseModel):
+    imap_server: str
+    imap_port: int = 993
+    email_address: str
+    password: str  # 明文，后端加密
+    download_dir: Optional[str] = None
+
+
+class EmailConfigResponse(BaseModel):
+    id: int
+    imap_server: str
+    imap_port: int
+    email_address: str
+    is_enabled: bool
+    download_dir: Optional[str] = None
+    last_sync_at: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}

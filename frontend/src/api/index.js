@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { ElMessage } from 'element-plus'
 
 /**
  * @typedef {import('../types').Resume} Resume
@@ -16,6 +17,161 @@ const api = axios.create({
   baseURL: '',
   timeout: 30000,
 })
+
+// ── 请求拦截器：自动附加 Authorization header ──────────
+
+api.interceptors.request.use(config => {
+  const token = localStorage.getItem('auth_token')
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
+})
+
+// ── 响应拦截器：401/403 处理 ────────────────────────────
+
+api.interceptors.response.use(
+  response => response,
+  error => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('auth_token')
+      localStorage.removeItem('auth_user')
+      window.location.href = '/login'
+    }
+    if (error.response?.status === 403) {
+      ElMessage.error('权限不足，无法执行此操作')
+    }
+    return Promise.reject(error)
+  }
+)
+
+// ── 认证 API ──────────────────────────────────────────
+
+/**
+ * 用户登录
+ * @param {string} usernameOrEmail - 用户名或邮箱
+ * @param {string} password - 密码
+ */
+export function login(usernameOrEmail, password) {
+  return api.post('/api/auth/login', { username_or_email: usernameOrEmail, password })
+}
+
+/**
+ * 用户注册
+ * @param {string} username - 用户名
+ * @param {string} email - 邮箱
+ * @param {string} password - 密码
+ */
+export function register(username, email, password) {
+  return api.post('/api/auth/register', { username, email, password })
+}
+
+/**
+ * 用户登出
+ */
+export function logout() {
+  return api.post('/api/auth/logout')
+}
+
+/**
+ * 获取当前用户信息
+ */
+export function getMe() {
+  return api.get('/api/auth/me')
+}
+
+// ── 管理员 API ────────────────────────────────────────
+
+/**
+ * 获取用户列表
+ * @param {number} skip - 偏移量
+ * @param {number} limit - 每页数量
+ */
+export function listUsers(skip = 0, limit = 20) {
+  return api.get('/api/admin/users', { params: { skip, limit } })
+}
+
+/**
+ * 更新用户信息
+ * @param {number|string} id - 用户 ID
+ * @param {object} data - 更新数据
+ */
+export function updateUser(id, data) {
+  return api.patch(`/api/admin/users/${id}`, data)
+}
+
+/**
+ * 获取登录日志
+ * @param {number} skip - 偏移量
+ * @param {number} limit - 每页数量
+ * @param {number|string|null} userId - 按用户筛选
+ */
+export function listLoginLogs(skip = 0, limit = 50, userId = null) {
+  const params = { skip, limit }
+  if (userId) params.user_id = userId
+  return api.get('/api/admin/login-logs', { params })
+}
+
+/**
+ * 获取操作日志
+ * @param {number} skip - 偏移量
+ * @param {number} limit - 每页数量
+ * @param {number|string|null} userId - 按用户筛选
+ * @param {string|null} action - 按操作筛选
+ */
+export function listOperationLogs(skip = 0, limit = 50, userId = null, action = null) {
+  const params = { skip, limit }
+  if (userId) params.user_id = userId
+  if (action) params.action = action
+  return api.get('/api/admin/operation-logs', { params })
+}
+
+/**
+ * 获取系统状态
+ */
+export function getSystemStatus() {
+  return api.get('/api/admin/system-status')
+}
+
+/**
+ * 获取邮件配置列表
+ */
+export function listEmailConfigs() {
+  return api.get('/api/admin/email-configs')
+}
+
+/**
+ * 创建邮件配置
+ * @param {object} data - 配置数据
+ */
+export function createEmailConfig(data) {
+  return api.post('/api/admin/email-configs', data)
+}
+
+/**
+ * 删除邮件配置
+ * @param {number|string} id - 配置 ID
+ */
+export function deleteEmailConfig(id) {
+  return api.delete(`/api/admin/email-configs/${id}`)
+}
+
+/**
+ * 同步邮件配置
+ * @param {number|string} id - 配置 ID
+ */
+export function syncEmailConfig(id) {
+  return api.post(`/api/admin/email-sync/${id}`)
+}
+
+/**
+ * 获取邮件同步日志
+ * @param {number} skip - 偏移量
+ * @param {number} limit - 每页数量
+ */
+export function listEmailSyncLogs(skip = 0, limit = 20) {
+  return api.get('/api/admin/email-sync-logs', { params: { skip, limit } })
+}
 
 // ── 简历 API ──────────────────────────────────────────
 

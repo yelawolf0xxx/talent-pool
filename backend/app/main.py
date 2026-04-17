@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.models.db import init_db, SessionLocal
-from app.routes import api, chat
+from app.routes import api, chat, auth
 from app.services.scanner import scan_resume_directory
 from app.services.parser import parse_resume
 
@@ -22,6 +22,9 @@ logger = logging.getLogger(__name__)
 
 # 全局扫描锁：防止手动扫描和定时扫描并发竞争
 scan_lock = threading.Lock()
+
+# 应用启动时间（用于系统状态 uptime 计算）
+_startup_time = datetime.now()
 
 app = FastAPI(title="AI 简历人才库", version="0.1.0")
 
@@ -95,6 +98,7 @@ do_scan = _do_scan
 # 注册路由
 app.include_router(api.router)
 app.include_router(chat.router)
+app.include_router(auth.router)
 
 
 @app.get("/health")

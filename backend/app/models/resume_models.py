@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from sqlalchemy import (
-    Column, Integer, String, Text, DateTime, Boolean, Index,
+    Column, Integer, String, Text, DateTime, Boolean, ForeignKey, Index,
 )
 from app.models.db import Base
 
@@ -43,6 +43,7 @@ class Resume(Base):
     summary_text = Column(Text, nullable=True, comment="AI 生成的简历摘要")
     is_deleted = Column(Boolean, default=False, nullable=False, comment="是否已删除（软删除）")
     deleted_at = Column(DateTime, nullable=True, comment="删除时间")
+    uploaded_by = Column(Integer, ForeignKey("users.id"), nullable=True, comment="上传者")
     created_at = Column(DateTime, default=datetime.now, comment="创建时间")
 
     __table_args__ = (

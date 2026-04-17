@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_format: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
+    # JWT 认证配置
+    jwt_secret: str = "change-me-in-production"
+    jwt_expire_hours: int = 24
+
     class Config:
         env_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
         populate_by_name = True
