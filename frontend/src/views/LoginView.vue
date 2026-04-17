@@ -77,7 +77,6 @@ const rules = {
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
 }
 
-// 页面加载时恢复记住的用户名
 onMounted(() => {
   const saved = localStorage.getItem('remembered_username')
   if (saved) {
@@ -86,9 +85,6 @@ onMounted(() => {
   }
 })
 
-/**
- * 处理登录
- */
 async function handleLogin() {
   if (!formRef.value) return
 
@@ -102,7 +98,6 @@ async function handleLogin() {
   try {
     await authStore.login(form.username, form.password)
 
-    // 记住我：保存用户名到 localStorage
     if (rememberMe.value) {
       localStorage.setItem('remembered_username', form.username)
     } else {
@@ -110,7 +105,10 @@ async function handleLogin() {
     }
 
     ElMessage.success('登录成功')
-    router.push('/')
+    // 使用 setTimeout 确保 token 写入 localStorage 后再跳转
+    setTimeout(() => {
+      router.push('/')
+    }, 100)
   } catch (e) {
     ElMessage.error('登录失败：' + (e.response?.data?.detail || e.message))
   } finally {
