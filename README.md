@@ -4,6 +4,53 @@
 
 ## 更新记录
 
+### 2026-04-20 — AI 助手候选人推荐 + Markdown 渲染 + 一键启动
+
+**新增功能：**
+
+- **AI 助手候选人推荐**：AI 对话现在能够基于真实人才库数据推荐候选人。当用户提问包含推荐意图时，系统自动检索人才库并将匹配结果注入对话上下文，AI 基于真实数据作答
+- **意图识别**：内置推荐意图关键词检测，自动区分"推荐候选人"和"一般咨询"两类问题
+- **Markdown 渲染**：AI 回复支持 Markdown 格式（粗体、列表、标题等），提升回复易读性
+
+**新增脚本：**
+
+- `start.bat`：Windows 一键启动脚本，同时启动前后端服务
+
+**AI 对话增强：**
+
+- 推荐意图问题（如"推荐 Java 候选人"）→ 自动检索人才库，AI 基于真实数据推荐
+- 一般咨询问题（如"如何面试"）→ 保持原有行为，不触发检索
+
+### 2026-04-17（二） — 邮箱配置下放普通用户 + 首页"我的简历/全部简历"切换
+
+**新增功能：**
+
+- **邮箱配置下放普通用户**：每个已登录用户均可配置自己的 IMAP 邮箱，管理个人邮箱抓取
+- **首页 Tab 切换**：默认展示"我的简历"（从个人邮箱同步的简历），可切换"全部简历"查看所有来源
+- **用户端邮箱管理页面**：新增 `/email-config` 路由，支持新增/编辑/删除邮箱配置、手动同步、查看同步日志
+- **简历归属追踪**：`resume_files` 表新增 `uploader_id` 字段，`resumes` 表通过 `uploaded_by` 关联归属用户
+- **邮箱同步路径标识**：同步文件保存到 `resume_dir/email_{user[at]domain}/YYYY-MM-DD/`，scanner 自动识别归属用户
+
+**数据库变更：**
+
+- `email_configs` 表新增 `user_id INT FK → users.id, nullable=True`
+- `resume_files` 表新增 `uploader_id INT FK → users.id, nullable=True`
+
+**新增 API：**
+
+| 方法 | 路径 | 说明 | 权限 |
+|------|------|------|------|
+| GET | `/api/user/email-configs` | 获取当前用户的邮箱配置 | 需登录 |
+| POST | `/api/user/email-configs` | 创建/更新当前用户的邮箱配置 | 需登录 |
+| DELETE | `/api/user/email-configs/{id}` | 删除当前用户的邮箱配置 | 需登录 |
+| POST | `/api/user/email-sync/{id}` | 手动触发当前用户的邮箱同步 | 需登录 |
+| GET | `/api/user/email-sync-logs` | 当前用户的同步日志 | 需登录 |
+
+**修改 API：**
+
+- `GET /api/resumes` 新增 `mine=true` 查询参数，仅返回当前用户的简历
+- `POST /api/search` 新增 `mine=true` 查询参数，仅搜索当前用户的简历
+
 ### 2026-04-17 — 账号系统 + 管理员端 + 邮箱自动抓取
 
 **新增功能：**
@@ -36,7 +83,9 @@
 - **AI 结构化提取**：使用大语言模型从非结构化简历中提取姓名、技能、教育背景、工作经历等
 - **混合搜索**：结合 SQL 关键词匹配与 ChromaDB 向量语义搜索，按加权分数排序
 - **岗位匹配分析**：输入岗位需求描述，AI 生成匹配度评分和推荐理由
-- **AI 对话**：针对特定候选人进行多轮对话，深入了解候选人背景
+- **AI 对话**：针对特定候选人进行多轮对话，或让 AI 从人才库中推荐匹配候选人
+- **AI 智能推荐**：支持自然语言提问推荐候选人（如"推荐有 Java 经验的候选人"），AI 自动检索人才库并基于真实数据作答
+- **Markdown 渲染**：AI 回复支持 Markdown 格式，排版清晰易读
 - **多目录支持**：可同时监控多个简历存放目录
 - **账号认证**：JWT Token 认证，支持用户名/邮箱登录
 - **权限分权**：管理员可管理用户、查看日志、配置邮箱抓取
@@ -141,6 +190,7 @@ app/
 | status | VARCHAR(20) | 状态: pending/processing/done/failed |
 | created_at | DATETIME | 发现时间 |
 | processed_at | DATETIME | 处理完成时间 |
+| uploader_id | INT FK → users.id | 上传者（邮箱同步时设置） |
 
 ### resumes（简历数据表）
 
@@ -225,6 +275,7 @@ app/
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | id | INT PK | 自增主键 |
+| user_id | INT FK → users.id | 关联用户（可选，管理员配置可为空） |
 | imap_server | VARCHAR(200) | IMAP 服务器地址 |
 | imap_port | INT | IMAP 端口，默认 993 |
 | email_address | VARCHAR(200) | 邮箱地址 |
@@ -374,6 +425,70 @@ POST /api/admin/email-sync/{config_id}
 ```
 GET /api/admin/email-sync-logs?skip=0&limit=20
 ```
+
+### 用户端 API（需登录）
+
+**获取我的邮箱配置**
+
+```
+GET /api/user/email-configs
+```
+
+**创建/更新我的邮箱配置**
+
+```
+POST /api/user/email-configs
+Content-Type: application/json
+
+{
+  "imap_server": "imap.example.com",
+  "imap_port": 993,
+  "email_address": "my@example.com",
+  "password": "your_authorization_code",
+  "download_dir": "\\\\192.168.3.30\\简历资料夹"
+}
+```
+
+**删除我的邮箱配置**
+
+```
+DELETE /api/user/email-configs/{config_id}
+```
+
+**手动触发我的邮箱同步**
+
+```
+POST /api/user/email-sync/{config_id}
+```
+
+**我的同步日志**
+
+```
+GET /api/user/email-sync-logs?skip=0&limit=20
+```
+
+**获取简历列表**
+
+```
+GET /api/resumes?skip=0&limit=20&mine=false
+```
+
+参数 `mine=true` 时仅返回当前用户的简历。
+
+**搜索简历**
+
+```
+POST /api/search
+Content-Type: application/json
+
+{
+  "query": "Java后端开发",
+  "skills": ["Java", "Spring Boot"],
+  "min_years_exp": 3
+}
+```
+
+查询参数 `?mine=true` 时仅搜索当前用户的简历。
 
 ### 健康检查
 
@@ -591,6 +706,36 @@ Content-Type: application/json
 }
 ```
 
+**AI 智能推荐功能**：
+
+当用户消息包含候选人推荐意图时（如"推荐 Java 候选人"、"找有前端经验的人"），系统会自动：
+
+1. 使用混合搜索算法检索人才库中匹配的候选人
+2. 将匹配结果（最多 10 条）注入对话上下文
+3. AI 基于真实数据给出推荐回答
+
+支持的推荐意图关键词：推荐、筛选、找、有哪些、多少人、合适、匹配、人才库、候选人，以及常见技术栈名称（Java、Python、前端、后端等）。
+
+**示例：**
+
+```json
+{"session_id": "s1", "messages": [{"role": "user", "content": "推荐有 Java 开发经验的候选人"}]}
+```
+
+AI 回复示例：
+
+```
+根据您的需求，为您推荐以下候选人：
+
+1. **张三** - Java 开发工程师 - 3年经验
+   技能：Java, Spring Boot, MySQL, Redis
+   亮点：精通微服务架构，独立负责订单系统重构
+
+2. **李四** - 后端开发工程师 - 5年经验
+   技能：Java, Spring Cloud, Docker, K8s
+   亮点：有高并发系统经验，日均百万级请求
+```
+
 ## 快速开始
 
 ### 前置要求
@@ -600,7 +745,13 @@ Content-Type: application/json
 - Node.js 18+
 - AI API 密钥（Claude API 或兼容网关）
 
-### 后端部署
+### 快速启动
+
+**Windows 一键启动：**
+
+双击项目根目录下的 `start.bat` 脚本，自动同时启动前后端服务。
+
+**手动启动：**
 
 1. **安装依赖**
 
@@ -670,6 +821,8 @@ npm run dev
 ```
 
 前端开发服务器默认运行在 `http://localhost:3000`，`/api` 请求自动代理到后端 `http://127.0.0.1:8000`。
+
+> 前端依赖 `markdown-it` 用于渲染 AI 回复的 Markdown 格式内容。
 
 生产构建：
 
@@ -787,6 +940,7 @@ DOCX/PPTX 中的表格文本使用 `[表格N]` 和 `[表格N 行M]` 标记保留
 3. **AI 对话** (`chat_completion`)
    - 支持传入简历上下文作为 system prompt 补充
    - 人事客服角色设定
+   - **RAG 增强**：对话时自动检索人才库，将匹配候选人注入上下文，实现基于真实数据的推荐
 
 ### 搜索服务 (search.py)
 
@@ -816,9 +970,10 @@ ChromaDB 向量索引管理。
 |------|------|------|------|
 | `/login` | LoginView | 访客 | 登录页面 |
 | `/register` | RegisterView | 访客 | 注册页面 |
-| `/` | HomeView | 需登录 | 首页：简历列表、搜索、筛选、上传、批量删除 |
+| `/` | HomeView | 需登录 | 首页：我的简历/全部简历 Tab、搜索、上传、批量删除 |
 | `/resume/:id` | DetailView | 需登录 | 简历详情、岗位匹配推荐 |
-| `/chat` | ChatView | 需登录 | AI 对话界面 |
+| `/chat` | ChatView | 需登录 | AI 对话界面（支持 Markdown 渲染、人才库智能推荐） |
+| `/email-config` | EmailConfigView | 需登录 | 邮箱管理：配置 IMAP、手动同步、同步日志 |
 | `/recycle-bin` | RecycleBinView | 需管理员 | 回收站：查看已删除简历、批量恢复 |
 | `/admin` | AdminView | 需管理员 | 管理后台：用户管理、日志、系统状态、邮箱配置 |
 
@@ -941,6 +1096,14 @@ ChromaDB 需要下载 embedding 模型，首次运行时会自动下载。如果
 **Q: Token 过期怎么办？**
 
 Token 默认有效期 24 小时（可通过 `JWT_EXPIRE_HOURS` 调整）。过期后需重新登录。前端会在收到 401 响应时自动清除 token 并跳转登录页。
+
+**Q: "我的简历"和"全部简历"有什么区别？**
+
+"我的简历" Tab 仅显示从你配置的邮箱中同步抓取到的简历（通过 `uploaded_by` 字段过滤）。"全部简历" Tab 显示系统中所有来源的简历，包括手动上传和其他用户邮箱同步的简历。
+
+**Q: 普通用户如何配置邮箱同步？**
+
+登录后点击顶部导航栏的用户名，选择"邮箱管理"，进入邮箱管理页面。点击"新增邮箱配置"，填写 IMAP 服务器、邮箱地址和授权码，保存后即可手动触发同步。同步后的简历文件会自动出现在"我的简历" Tab 中。
 
 ## License
 

@@ -17,7 +17,8 @@
             <el-icon v-if="msg.role === 'user'"><User /></el-icon>
             <el-icon v-else><Service /></el-icon>
           </el-avatar>
-          <div class="bubble">{{ msg.content }}</div>
+          <div v-if="msg.role === 'user'" class="bubble">{{ msg.content }}</div>
+          <div v-else class="bubble markdown-body" v-html="renderMarkdown(msg.content)"></div>
         </div>
 
         <div v-if="loading" class="message assistant">
@@ -60,9 +61,12 @@
 </template>
 
 <script setup>
-import { ref, nextTick, onMounted } from 'vue'
+import { ref, nextTick, onMounted, computed } from 'vue'
 import { chat } from '../api'
 import { ElMessage } from 'element-plus'
+import MarkdownIt from 'markdown-it'
+
+const md = new MarkdownIt({ breaks: true, linkify: true })
 
 const messages = ref([])
 const input = ref('')
@@ -71,11 +75,19 @@ const sessionId = ref('session_' + Date.now())
 const chatContainer = ref(null)
 
 const suggestions = [
-  '如何快速筛选合适的候选人？',
-  '这个岗位需要哪些核心技能？',
-  '如何评估候选人的技术能力？',
-  '人才库里有多少人做过微服务？',
+  '推荐有 Java 开发经验的候选人',
+  '人才库里有哪些前端开发？',
+  '推荐适合微服务架构的候选人',
+  '帮我找有项目管理经验的人',
 ]
+
+/**
+ * 将 Markdown 文本渲染为 HTML
+ */
+function renderMarkdown(text) {
+  if (!text) return ''
+  return md.render(text)
+}
 
 function scrollToBottom() {
   nextTick(() => {
@@ -129,15 +141,15 @@ async function sendMessage() {
   align-items: center;
   gap: 8px;
   font-weight: 600;
-  font-size: 16px;
+  font-size: var(--font-size-lg);
 }
 
 .chat-container {
   height: 500px;
   overflow-y: auto;
   padding: 16px;
-  background: #fafafa;
-  border-radius: 8px;
+  background: var(--chat-bg);
+  border-radius: var(--border-radius-md);
 }
 
 .message {
@@ -153,25 +165,26 @@ async function sendMessage() {
 .bubble {
   max-width: 70%;
   padding: 12px 16px;
-  border-radius: 12px;
+  border-radius: var(--border-radius-md);
   line-height: 1.6;
-  font-size: 14px;
+  font-size: var(--font-size-base);
 }
 
 .message.user .bubble {
-  background: #409eff;
-  color: #fff;
+  background: var(--chat-bubble-user);
+  color: var(--chat-bubble-user-text);
   border-bottom-right-radius: 4px;
 }
 
 .message.assistant .bubble {
-  background: #fff;
-  border: 1px solid #e4e7ed;
+  background: var(--chat-bubble-assistant);
+  color: var(--chat-bubble-assistant-text);
+  border: 1px solid var(--chat-bubble-assistant-border);
   border-bottom-left-radius: 4px;
 }
 
 .thinking {
-  color: #999;
+  color: var(--text-muted);
   font-style: italic;
 }
 
@@ -187,8 +200,8 @@ async function sendMessage() {
 }
 
 .hint {
-  color: #999;
-  font-size: 12px;
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
 }
 
 .guide-card {
@@ -199,5 +212,57 @@ async function sendMessage() {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+/* ── Markdown 渲染样式 ─────────────────────────────── */
+.bubble :deep(p) {
+  margin: 0 0 8px;
+}
+.bubble :deep(p:last-child) {
+  margin-bottom: 0;
+}
+.bubble :deep(strong) {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.bubble :deep(ul) {
+  margin: 4px 0;
+  padding-left: 20px;
+}
+.bubble :deep(li) {
+  margin-bottom: 4px;
+  line-height: 1.5;
+}
+.bubble :deep(h1),
+.bubble :deep(h2),
+.bubble :deep(h3) {
+  margin: 12px 0 6px;
+  font-weight: 600;
+}
+.bubble :deep(h1) { font-size: 1.2em; }
+.bubble :deep(h2) { font-size: 1.1em; }
+.bubble :deep(h3) { font-size: 1.05em; }
+.bubble :deep(hr) {
+  border: none;
+  border-top: 1px solid var(--chat-bubble-assistant-border);
+  margin: 12px 0;
+}
+.bubble :deep(code) {
+  background: rgba(0, 0, 0, 0.06);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.9em;
+  font-family: monospace;
+}
+.bubble :deep(pre) {
+  background: rgba(0, 0, 0, 0.04);
+  padding: 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 8px 0;
+}
+.bubble :deep(pre code) {
+  background: none;
+  padding: 0;
 }
 </style>

@@ -468,6 +468,45 @@ def generate_recommendation(resume_summary: str, query: str) -> dict:
     }
 
 
+def build_candidates_context(candidates: list, max_count: int = 10) -> str:
+    """将搜索结果格式化为 AI 对话可用的候选人上下文文本"""
+    if not candidates:
+        return "（人才库中暂无匹配的候选人）"
+
+    lines = []
+    for item in candidates[:max_count]:
+        r = item.resume
+        parts = []
+        if r.name:
+            parts.append(f"姓名: {r.name}")
+        if r.current_title:
+            parts.append(f"职位: {r.current_title}")
+        if r.years_exp:
+            parts.append(f"经验: {r.years_exp}")
+        if r.skills:
+            parts.append(f"技能: {', '.join(r.skills[:8])}")
+        if r.summary_text:
+            parts.append(f"简介: {r.summary_text}")
+        if item.score > 0:
+            parts.append(f"匹配度: {item.score:.0%}")
+        lines.append(" | ".join(parts))
+
+    return "\n".join(lines)
+
+
+# 推荐意图关键词：用于判断是否需要检索人才库
+RECOMMEND_INTENT_KEYWORDS = [
+    "推荐", "筛选", "找", "有哪些", "多少人", "几个",
+    "合适", "匹配", "谁有", "有没有", "人才库", "候选人",
+    "Java", "Python", "前端", "后端", "开发", "测试", "运维",
+]
+
+
+def _is_recommendation_intent(text: str) -> bool:
+    """判断用户消息是否为候选人检索意图"""
+    return any(kw in text for kw in RECOMMEND_INTENT_KEYWORDS)
+
+
 def chat_completion(messages: list[dict], resume_context: Optional[str] = None) -> str:
     """AI 对话（人事客服），支持上下文"""
     try:

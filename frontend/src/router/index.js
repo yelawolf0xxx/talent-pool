@@ -39,6 +39,18 @@ const routes = [
     component: () => import('../views/AdminView.vue'),
     meta: { requiresAuth: true, requiresAdmin: true },
   },
+  {
+    path: '/email-config',
+    name: 'EmailConfig',
+    component: () => import('../views/EmailConfigView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/email-tutorial',
+    name: 'EmailTutorial',
+    component: () => import('../views/EmailTutorialView.vue'),
+    meta: { requiresAuth: true },
+  },
 ]
 
 const router = createRouter({
