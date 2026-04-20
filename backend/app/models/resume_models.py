@@ -23,6 +23,7 @@ class ResumeFile(Base):
     )
     created_at = Column(DateTime, default=datetime.now, comment="发现时间")
     processed_at = Column(DateTime, nullable=True, comment="处理完成时间")
+    uploader_id = Column(Integer, ForeignKey("users.id"), nullable=True, comment="上传者（邮箱同步时设置）")
 
 
 class Resume(Base):

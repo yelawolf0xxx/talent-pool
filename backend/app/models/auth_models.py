@@ -72,6 +72,7 @@ class EmailConfig(Base):
     __tablename__ = "email_configs"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, comment="关联用户")
     imap_server = Column(String(200), nullable=True, comment="IMAP 服务器地址")
     imap_port = Column(Integer, nullable=False, default=993, comment="IMAP 端口")
     email_address = Column(String(200), nullable=True, comment="邮箱地址")

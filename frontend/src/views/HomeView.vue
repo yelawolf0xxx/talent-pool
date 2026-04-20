@@ -73,6 +73,16 @@
     </div>
 
     <template v-else>
+      <!-- 简历来源 Tab -->
+      <el-tabs v-model="activeTab" type="card">
+        <el-tab-pane label="全部简历" name="all">
+          <div class="tab-hint">显示系统中所有简历</div>
+        </el-tab-pane>
+        <el-tab-pane label="我的简历" name="mine">
+          <div class="tab-hint">显示从您配置的邮箱中同步的简历</div>
+        </el-tab-pane>
+      </el-tabs>
+
       <!-- 批量操作栏 -->
       <div v-if="selectedIds.length > 0" class="batch-actions">
         <el-tag type="info" size="large">已选 {{ selectedIds.length }} 份简历</el-tag>
@@ -92,27 +102,27 @@
           </el-button>
         </div>
         <el-empty v-if="displayResumes.length === 0" description="未找到匹配的候选人，请调整搜索条件" />
-        <div v-else class="resume-grid">
-          <el-row :gutter="16">
-            <el-col v-for="item in displayResumes" :key="item.id" :xs="24" :sm="12" :md="8">
+        <div v-else class="resume-waterfall">
+          <el-checkbox-group v-model="selectedIds" class="waterfall-container">
+            <div
+              v-for="item in displayResumes"
+              :key="item.id"
+              class="waterfall-item"
+            >
               <el-card
                 class="resume-card"
                 shadow="hover"
                 :class="{ selected: selectedIds.includes(item.id) }"
               >
                 <div class="card-checkbox">
-                  <el-checkbox
-                    v-model="selectedIds"
-                    :label="item.id"
-                    @click.stop
-                  />
+                  <el-checkbox :value="item.id" @click.stop />
                 </div>
                 <div
                   class="card-content"
                   @click="$router.push(`/resume/${item.id}`)"
                 >
                 <div class="card-header">
-                  <el-avatar :size="48" style="background: #409eff">
+                  <el-avatar :size="48" style="background: var(--color-primary); color: var(--text-on-primary)">
                     {{ item.name?.charAt(0) || '?' }}
                   </el-avatar>
                   <div class="card-info">
@@ -121,15 +131,14 @@
                   </div>
                 </div>
                 <div class="card-body">
-                  <el-tag v-if="item.years_exp" size="small">
+                  <el-tag v-if="item.years_exp" size="small" class="skill-tag">
                     {{ item.years_exp }}年经验
                   </el-tag>
                   <el-tag
                     v-for="skill in (item.skills || []).slice(0, 4)"
                     :key="skill"
                     size="small"
-                    type="info"
-                    style="margin-left: 4px"
+                    class="skill-tag"
                   >
                     {{ skill }}
                   </el-tag>
@@ -137,7 +146,7 @@
                 <div v-if="item.score" class="match-score">
                   <el-progress
                     :percentage="Math.round(item.score * 100)"
-                    :color="item.score > 0.6 ? '#67c23a' : '#e6a23c'"
+                    :color="item.score > 0.6 ? 'var(--color-success)' : 'var(--color-warning)'"
                     :show-text="false"
                     :stroke-width="4"
                   />
@@ -145,39 +154,39 @@
                 </div>
                 </div>
               </el-card>
-            </el-col>
-          </el-row>
+            </div>
+          </el-checkbox-group>
         </div>
       </div>
 
       <!-- 全部简历画廊 -->
       <div v-else class="resume-gallery">
         <div class="gallery-header">
-          <h2>全部简历</h2>
+          <h2>{{ activeTab === 'mine' ? '我的简历' : '全部简历' }}</h2>
           <span class="result-count">共 {{ allResumes.length }} 条</span>
         </div>
-        <el-empty v-if="allResumes.length === 0" description="暂无简历，请将 PDF 简历放入简历目录" />
-        <div v-else class="resume-grid">
-          <el-row :gutter="16">
-            <el-col v-for="item in allResumes" :key="item.id" :xs="24" :sm="12" :md="8">
+        <el-empty v-if="allResumes.length === 0" :description="activeTab === 'mine' ? '暂无简历，请在上方邮箱管理中配置邮箱并同步' : '暂无简历，请将 PDF 简历放入简历目录'" />
+        <div v-else ref="waterfallContainer" class="resume-waterfall">
+          <el-checkbox-group v-model="selectedIds" class="waterfall-container checkbox-grid">
+            <div
+              v-for="item in allResumes"
+              :key="item.id"
+              class="waterfall-item"
+            >
               <el-card
                 class="resume-card"
                 shadow="hover"
                 :class="{ selected: selectedIds.includes(item.id) }"
               >
                 <div class="card-checkbox">
-                  <el-checkbox
-                    v-model="selectedIds"
-                    :label="item.id"
-                    @click.stop
-                  />
+                  <el-checkbox :value="item.id" @click.stop />
                 </div>
                 <div
                   class="card-content"
                   @click="$router.push(`/resume/${item.id}`)"
                 >
                 <div class="card-header">
-                  <el-avatar :size="48" style="background: #409eff">
+                  <el-avatar :size="48" style="background: var(--color-primary); color: var(--text-on-primary)">
                     {{ item.name?.charAt(0) || '?' }}
                   </el-avatar>
                   <div class="card-info">
@@ -186,15 +195,14 @@
                   </div>
                 </div>
                 <div class="card-body">
-                  <el-tag v-if="item.years_exp" size="small">
+                  <el-tag v-if="item.years_exp" size="small" class="skill-tag">
                     {{ item.years_exp }}年经验
                   </el-tag>
                   <el-tag
                     v-for="skill in (item.skills || []).slice(0, 4)"
                     :key="skill"
                     size="small"
-                    type="info"
-                    style="margin-left: 4px"
+                    class="skill-tag"
                   >
                     {{ skill }}
                   </el-tag>
@@ -204,28 +212,30 @@
                 </div>
                 </div>
               </el-card>
-            </el-col>
-          </el-row>
+            </div>
+            <!-- 无限滚动哨兵 -->
+            <div ref="loadMoreTrigger" style="grid-column: 1 / -1; padding: 36px 0;">
+              <div v-if="loadingMore" class="infinite-loading">
+                <el-icon class="is-loading"><Loading /></el-icon>
+                <span>加载中...</span>
+              </div>
+              <p v-else-if="!hasMore && allResumes.length > PAGE_SIZE" class="no-more">已全部加载</p>
+            </div>
+          </el-checkbox-group>
         </div>
-
-        <!-- 加载更多 -->
-        <div v-if="hasMore" class="load-more">
-          <el-button :loading="loadingMore" @click="loadMore">
-            {{ loadingMore ? '加载中...' : '加载更多' }}
-          </el-button>
-        </div>
-        <p v-else-if="allResumes.length > PAGE_SIZE" class="no-more">已全部加载</p>
       </div>
     </template>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, computed, nextTick, watch } from 'vue'
 import { searchResumes, listResumes, deleteBatch, uploadResume } from '../api'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const PAGE_SIZE = 20
+
+const activeTab = ref('all')
 
 const form = reactive({
   query: '',
@@ -246,6 +256,9 @@ const ALLOWED_EXTENSIONS = ['.pdf', '.doc', '.docx', '.ppt', '.pptx']
 
 // 搜索结果（带分数和匹配原因）
 const searchResults = ref([])
+
+// 当前是否为"我的简历"模式
+const isMine = computed(() => activeTab.value === 'mine')
 
 // 当前展示的简历列表
 const displayResumes = computed(() => {
@@ -270,13 +283,19 @@ const displayResumes = computed(() => {
 async function loadFirstPage() {
   loading.value = true
   try {
-    const { data } = await listResumes(0, PAGE_SIZE)
-    allResumes.value = data
-    hasMore.value = data.length >= PAGE_SIZE
-  } catch {
+    const res = await listResumes(0, PAGE_SIZE, isMine.value)
+    const resumes = Array.isArray(res.data) ? res.data : (res.data?.items || [])
+    allResumes.value = resumes
+    hasMore.value = resumes.length >= PAGE_SIZE
+  } catch (e) {
     allResumes.value = []
+    hasMore.value = false
+    if (e.response?.status !== 401) {
+      ElMessage.error('加载简历失败：' + (e.response?.data?.detail || e.message))
+    }
   } finally {
     loading.value = false
+    nextTick(() => setupScrollObserver())
   }
 }
 
@@ -284,13 +303,16 @@ async function loadFirstPage() {
  * 加载更多简历
  */
 async function loadMore() {
-  if (loadingMore.value || !hasMore.value) return
+  if (loadingMore.value || !hasMore.value || loading.value) return
   loadingMore.value = true
   try {
     const skip = allResumes.value.length
-    const { data } = await listResumes(skip, PAGE_SIZE)
-    allResumes.value = [...allResumes.value, ...data]
-    hasMore.value = data.length >= PAGE_SIZE
+    const res = await listResumes(skip, PAGE_SIZE, isMine.value)
+    const resumes = Array.isArray(res.data) ? res.data : (res.data?.items || [])
+    if (resumes.length > 0) {
+      allResumes.value = [...allResumes.value, ...resumes]
+    }
+    hasMore.value = resumes.length >= PAGE_SIZE
   } catch (e) {
     ElMessage.error('加载失败：' + (e.response?.data?.detail || e.message))
   } finally {
@@ -298,7 +320,44 @@ async function loadMore() {
   }
 }
 
-onMounted(loadFirstPage)
+/**
+ * 用容器底部元素触发的简单无限滚动
+ */
+let scrollObserver = null
+const loadMoreTrigger = ref(null)
+
+function setupScrollObserver() {
+  if (scrollObserver) scrollObserver.disconnect()
+  scrollObserver = new IntersectionObserver(
+    entries => {
+      if (entries[0].isIntersecting && hasMore.value && !loadingMore.value && !loading.value) {
+        loadMore()
+      }
+    },
+    { rootMargin: '400px' }
+  )
+  nextTick(() => {
+    if (loadMoreTrigger.value) {
+      scrollObserver.observe(loadMoreTrigger.value)
+    }
+  })
+}
+
+// Tab 切换时重新加载数据
+watch(activeTab, () => {
+  searched.value = false
+  searchResults.value = []
+  selectedIds.value = []
+  loadingMore.value = false
+  hasMore.value = true
+  loading.value = true
+  allResumes.value = []
+  loadFirstPage()
+})
+
+onMounted(() => {
+  loadFirstPage()
+})
 
 async function handleSearch() {
   if (!form.query.trim() && form.skills.length === 0 && form.minYearsExp === null) {
@@ -309,7 +368,7 @@ async function handleSearch() {
   loading.value = true
   searched.value = true
   try {
-    const { data } = await searchResumes(form.query, form.skills, form.minYearsExp)
+    const { data } = await searchResumes(form.query, form.skills, form.minYearsExp, isMine.value)
     searchResults.value = data.results || []
     if (searchResults.value.length === 0) {
       ElMessage.info('未找到匹配的候选人，请调整搜索条件')
@@ -328,6 +387,20 @@ function clearSearch() {
   searched.value = false
   searchResults.value = []
 }
+
+/**
+ * Tab 切换时重新加载数据
+ */
+watch(activeTab, () => {
+  searched.value = false
+  searchResults.value = []
+  selectedIds.value = []
+  loadingMore.value = false
+  hasMore.value = true
+  loading.value = true
+  allResumes.value = []
+  loadFirstPage()
+})
 
 async function handleBatchDelete() {
   if (selectedIds.value.length === 0) return
@@ -426,35 +499,37 @@ async function handleFileSelect(event) {
 <style scoped>
 .search-hero {
   text-align: center;
-  margin-bottom: 32px;
+  margin-bottom: 48px;
 }
 
 .hero-actions {
   display: flex;
   justify-content: center;
-  margin-bottom: 16px;
+  margin-bottom: 24px;
 }
 
 .batch-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  background: #fff;
-  border-radius: 8px;
-  margin-bottom: 16px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  gap: 18px;
+  padding: 18px 24px;
+  background: var(--batch-bg);
+  border-radius: var(--border-radius-md);
+  margin-bottom: 24px;
+  box-shadow: var(--batch-shadow);
 }
 
 .search-hero h1 {
-  font-size: 32px;
-  margin: 0 0 8px;
-  color: #1a1a2e;
+  font-size: var(--font-size-2xl);
+  margin: 0 0 12px;
+  color: var(--hero-text);
+  font-weight: 600;
 }
 
 .subtitle {
-  color: #666;
-  margin: 0 0 24px;
+  color: var(--hero-subtitle);
+  margin: 0 0 36px;
+  font-size: var(--font-size-lg);
 }
 
 .search-card {
@@ -466,78 +541,121 @@ async function handleFileSelect(event) {
 .gallery-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 20px;
-  padding: 0 4px;
+  gap: 18px;
+  margin-bottom: 30px;
+  padding: 0 6px;
 }
 
 .results-header h2,
 .gallery-header h2 {
   margin: 0;
-  font-size: 20px;
-  color: #1a1a2e;
+  font-size: var(--font-size-xl);
+  color: var(--text-primary);
+  font-weight: 600;
 }
 
 .result-count {
-  color: #909399;
-  font-size: 14px;
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
   margin-left: auto;
+}
+
+/* ── 瀑布流容器 ──────────────────────────────────────── */
+.waterfall-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 24px;
+  align-items: start;
+}
+
+/* el-checkbox-group 默认渲染为 div，需重置浏览器默认样式以匹配 grid 行为 */
+.el-checkbox-group.waterfall-container {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.waterfall-item {
+  width: 100%;
+}
+
+/* 无限滚动加载 */
+.infinite-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
 }
 
 .card-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
+  gap: 16px;
+  margin-bottom: 18px;
 }
 
 .resume-card {
   position: relative;
   cursor: pointer;
-  transition: transform 0.15s;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), background-color var(--transition-fast);
 }
 
 .resume-card:hover {
   transform: translateY(-2px);
+  background-color: var(--bg-surface-hover);
 }
 
 .resume-card.selected {
-  border-color: #409eff;
-  box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.2);
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-card-selected);
 }
 
 .card-checkbox {
   position: absolute;
-  top: 8px;
-  left: 8px;
+  top: 12px;
+  left: 12px;
   z-index: 1;
 }
 
 .card-content {
   cursor: pointer;
+  padding: 4px 4px 4px 32px;
 }
 
 .card-info h3 {
   margin: 0;
-  font-size: 16px;
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  line-height: 1.3;
+  word-break: break-word;
 }
 
 .card-info .title {
   margin: 4px 0 0;
-  color: #666;
-  font-size: 13px;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: 1.4;
+  word-break: break-word;
 }
 
 .card-body {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  margin-bottom: 12px;
+  gap: 6px;
+  margin-bottom: 18px;
+}
+
+.skill-tag {
+  background: var(--skill-bg) !important;
+  color: var(--skill-text) !important;
+  border-color: var(--skill-border) !important;
 }
 
 .card-summary {
-  color: #909399;
-  font-size: 12px;
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
   line-height: 1.6;
   display: -webkit-box;
   -webkit-line-clamp: 3;
@@ -546,13 +664,12 @@ async function handleFileSelect(event) {
   margin-top: 8px;
 }
 
-
 .match-score {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
-  color: #666;
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
   margin-top: 8px;
 }
 
@@ -560,15 +677,16 @@ async function handleFileSelect(event) {
   flex: 1;
 }
 
-.load-more {
-  text-align: center;
-  margin-top: 24px;
-}
-
 .no-more {
   text-align: center;
-  color: #909399;
-  font-size: 13px;
-  margin-top: 16px;
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+  margin: 0;
+}
+
+.tab-hint {
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+  margin-bottom: 8px;
 }
 </style>

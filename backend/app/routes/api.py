@@ -119,11 +119,15 @@ def manual_scan(
 def list_resumes(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
+    mine: bool = Query(False, description="仅显示当前用户的简历"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """列出所有已解析简历（排除已删除）"""
-    resumes = db.query(Resume).filter(Resume.is_deleted == False).offset(skip).limit(limit).all()
+    query = db.query(Resume).filter(Resume.is_deleted == False)
+    if mine:
+        query = query.filter(Resume.uploaded_by == current_user.id)
+    resumes = query.order_by(Resume.id.desc()).offset(skip).limit(limit).all()
     results = []
     for r in resumes:
         file_record = db.query(ResumeFile).filter(ResumeFile.id == r.file_id).first()
@@ -169,13 +173,19 @@ def get_resume(resume_id: int, db: Session = Depends(get_db), current_user: User
 
 
 @router.post("/search", response_model=SearchResponse)
-def search_resumes(req: SearchRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def search_resumes(
+    req: SearchRequest,
+    mine: bool = Query(False, description="仅搜索当前用户的简历"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """搜索简历（关键词 + 筛选）"""
     results = search_svc.search_resumes(
         db,
         query=req.query,
         skills=req.skills or None,
         min_years_exp=req.min_years_exp,
+        uploaded_by=current_user.id if mine else None,
     )
     return SearchResponse(total=len(results), results=results)
 

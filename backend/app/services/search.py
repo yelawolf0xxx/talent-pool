@@ -51,13 +51,17 @@ def _match_reasons(resume: Resume, query: str) -> list[str]:
 
 
 def search_resumes(db: Session, query: str, skills: Optional[list[str]] = None,
-                   min_years_exp: Optional[int] = None) -> list[SearchResultItem]:
+                   min_years_exp: Optional[int] = None, uploaded_by: Optional[int] = None) -> list[SearchResultItem]:
     """
-    混合搜索简历：SQL 关键词搜索 + ChromaDB 语义搜索。
+    混合搜索简历：SQL 关键词搜索 + ChromaDB 语义搜索混合排序。
 
     最终结果按加权分数排序。
     """
     all_resumes = db.query(Resume).filter(Resume.is_deleted == False).all()
+
+    # 按归属用户筛选
+    if uploaded_by is not None:
+        all_resumes = [r for r in all_resumes if r.uploaded_by == uploaded_by]
 
     # 应用筛选条件
     filtered = all_resumes

@@ -2,14 +2,41 @@
 
 import hashlib
 import logging
+import re
 from pathlib import Path
 
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.models.auth_models import User
 from app.models.resume_models import ResumeFile
 
 logger = logging.getLogger(__name__)
+
+# 匹配路径中 email_{safe_email}/ 模式，提取邮箱地址
+EMAIL_PREFIX_PATTERN = re.compile(r"email_([^/\\]+)[/\\]")
+
+
+def _resolve_user_from_path(file_path: str) -> str | None:
+    """从文件路径中提取 email_ 前缀对应的邮箱地址。
+
+    如果路径中包含 email_user[at]example.com/ 格式的子目录，
+    则还原邮箱地址（将 [at] 替换回 @）。
+    """
+    match = EMAIL_PREFIX_PATTERN.search(file_path)
+    if not match:
+        return None
+
+    safe_email = match.group(1)
+    # 还原邮箱地址
+    email_addr = safe_email.replace("[at]", "@")
+    return email_addr
+
+
+def _get_user_id_by_email(db: Session, email_addr: str) -> int | None:
+    """通过邮箱地址查询用户 ID。"""
+    user = db.query(User).filter(User.email == email_addr).first()
+    return user.id if user else None
 
 
 def compute_file_hash(file_path: Path) -> str:
@@ -58,14 +85,16 @@ def scan_resume_directory(db: Session) -> list[ResumeFile]:
 
         if existing is None:
             # 新文件
+            uploader_id = _get_user_id_by_email(db, _resolve_user_from_path(abs_path) or "")
             record = ResumeFile(
                 file_path=abs_path,
                 file_hash=file_hash,
                 status="pending",
+                uploader_id=uploader_id,
             )
             db.add(record)
             new_files.append(record)
-            logger.info("发现新简历: %s", file_path.name)
+            logger.info("发现新简历: %s (归属用户: %s)", file_path.name, uploader_id or "未知")
         elif existing.status in ("pending", "failed"):
             # 之前未处理成功或处理失败的，重新尝试
             existing.file_hash = file_hash

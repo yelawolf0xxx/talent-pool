@@ -1,0 +1,554 @@
+/* ============================================================
+   主题系统 — 3 种企业级 UI 主题
+   ============================================================
+   用法：在 <html> 元素上设置 data-theme 属性
+   - data-theme="business"  → 柔和商务风（默认）
+   - data-theme="minimal"   → 企业极简风
+   - data-theme="tech"      → 科技深色风
+   ============================================================ */
+
+/* ── 全局基础重置 ───────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: var(--bg-page);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ============================================================
+   主题 A：柔和商务风（默认）
+   柔和蓝色主调 + 白色卡片 + 适度阴影，平衡专业感与现代感
+   ============================================================ */
+[data-theme="business"],
+:root {
+  /* 基础色彩 */
+  --bg-page: #f0f4f8;
+  --bg-surface: #ffffff;
+  --bg-surface-hover: #f8fafc;
+  --bg-input: #ffffff;
+  --bg-input-focus: #ffffff;
+  --bg-badge: #ffffff;
+  --bg-empty: #f8fafc;
+
+  /* 文字色彩 */
+  --text-primary: #1a202c;
+  --text-secondary: #4a5568;
+  --text-muted: #718096;
+  --text-placeholder: #a0aec0;
+  --text-link: #3182ce;
+  --text-on-primary: #ffffff;
+  --text-on-success: #ffffff;
+  --text-on-warning: #ffffff;
+  --text-on-danger: #ffffff;
+
+  /* 品牌色彩 */
+  --color-primary: #3b82f6;
+  --color-primary-hover: #2563eb;
+  --color-primary-light: rgba(59, 130, 246, 0.08);
+  --color-primary-border: rgba(59, 130, 246, 0.3);
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+
+  /* 边框与分割线 */
+  --border-color: #e2e8f0;
+  --border-radius-sm: 6px;
+  --border-radius-md: 10px;
+  --border-radius-lg: 16px;
+  --border-radius-xl: 24px;
+
+  /* 阴影 */
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
+  --shadow-card-selected: 0 0 0 2px rgba(59, 130, 246, 0.25), 0 2px 8px rgba(59, 130, 246, 0.1);
+  --shadow-header: 0 1px 4px rgba(0, 0, 0, 0.06);
+  --shadow-input-focus: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  --shadow-batch-bar: 0 2px 8px rgba(0, 0, 0, 0.08);
+
+  /* 技能标签 */
+  --skill-bg: #dbeafe;
+  --skill-text: #1e40af;
+  --skill-border: rgba(59, 130, 246, 0.2);
+
+  /* 头像与装饰 */
+  --avatar-bg: #3b82f6;
+  --avatar-text: #ffffff;
+  --logo-color: #3b82f6;
+  --hero-gradient-start: #1e3a5f;
+  --hero-gradient-end: #3b82f6;
+  --hero-text: #1a202c;
+  --hero-subtitle: #4a5568;
+
+  /* 搜索卡片 */
+  --search-bg: #ffffff;
+  --search-border: #e2e8f0;
+  --search-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+
+  /* Tab 样式 */
+  --tab-bg: #f0f4f8;
+  --tab-active-bg: #ffffff;
+  --tab-active-text: #1a202c;
+  --tab-text: #718096;
+  --tab-border: #e2e8f0;
+
+  /* 批量操作栏 */
+  --batch-bg: #ffffff;
+  --batch-shadow: var(--shadow-batch-bar);
+
+  /* 字体 */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-size-xs: 11px;
+  --font-size-sm: 13px;
+  --font-size-base: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 20px;
+  --font-size-2xl: 28px;
+  --font-size-3xl: 36px;
+
+  /* 过渡动画 */
+  --transition-fast: 150ms ease;
+  --transition-normal: 250ms ease;
+  --transition-slow: 350ms ease;
+
+  /* 聊天相关 */
+  --chat-bg: #f8fafc;
+  --chat-bubble-user: #3b82f6;
+  --chat-bubble-user-text: #ffffff;
+  --chat-bubble-assistant: #ffffff;
+  --chat-bubble-assistant-text: #1a202c;
+  --chat-bubble-assistant-border: #e2e8f0;
+}
+
+/* ============================================================
+   主题 B：企业极简风
+   大面积留白 + 细线边框 + 浅灰底色，类似 Notion/Airbnb
+   ============================================================ */
+[data-theme="minimal"] {
+  /* 基础色彩 */
+  --bg-page: #fafafa;
+  --bg-surface: #ffffff;
+  --bg-surface-hover: #f5f5f5;
+  --bg-input: #ffffff;
+  --bg-input-focus: #ffffff;
+  --bg-badge: #ffffff;
+  --bg-empty: #fafafa;
+
+  /* 文字色彩 */
+  --text-primary: #374151;
+  --text-secondary: #6b7280;
+  --text-muted: #9ca3af;
+  --text-placeholder: #d1d5db;
+  --text-link: #4b5563;
+  --text-on-primary: #ffffff;
+  --text-on-success: #ffffff;
+  --text-on-warning: #ffffff;
+  --text-on-danger: #ffffff;
+
+  /* 品牌色彩 — 低调灰色调 */
+  --color-primary: #475569;
+  --color-primary-hover: #334155;
+  --color-primary-light: rgba(71, 85, 105, 0.06);
+  --color-primary-border: rgba(71, 85, 105, 0.2);
+  --color-success: #16a34a;
+  --color-warning: #d97706;
+  --color-danger: #dc2626;
+
+  /* 边框与分割线 */
+  --border-color: #e5e7eb;
+  --border-radius-sm: 8px;
+  --border-radius-md: 12px;
+  --border-radius-lg: 20px;
+  --border-radius-xl: 28px;
+
+  /* 阴影 — 极简，几乎无阴影 */
+  --shadow-card: 0 0 0 1px rgba(0, 0, 0, 0.04);
+  --shadow-card-hover: 0 0 0 1px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
+  --shadow-card-selected: 0 0 0 2px rgba(71, 85, 105, 0.2);
+  --shadow-header: 0 1px 0 rgba(0, 0, 0, 0.06);
+  --shadow-input-focus: 0 0 0 2px rgba(71, 85, 105, 0.15);
+  --shadow-batch-bar: 0 0 0 1px rgba(0, 0, 0, 0.06);
+
+  /* 技能标签 */
+  --skill-bg: #f3f4f6;
+  --skill-text: #475569;
+  --skill-border: rgba(71, 85, 105, 0.15);
+
+  /* 头像与装饰 */
+  --avatar-bg: #6b7280;
+  --avatar-text: #ffffff;
+  --logo-color: #374151;
+  --hero-gradient-start: #374151;
+  --hero-gradient-end: #6b7280;
+  --hero-text: #111827;
+  --hero-subtitle: #6b7280;
+
+  /* 搜索卡片 */
+  --search-bg: #ffffff;
+  --search-border: #e5e7eb;
+  --search-shadow: 0 0 0 1px rgba(0, 0, 0, 0.04);
+
+  /* Tab 样式 */
+  --tab-bg: transparent;
+  --tab-active-bg: #ffffff;
+  --tab-active-text: #111827;
+  --tab-text: #9ca3af;
+  --tab-border: #e5e7eb;
+
+  /* 批量操作栏 */
+  --batch-bg: #ffffff;
+  --batch-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06);
+
+  /* 字体 */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-size-xs: 11px;
+  --font-size-sm: 13px;
+  --font-size-base: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 20px;
+  --font-size-2xl: 30px;
+  --font-size-3xl: 40px;
+
+  /* 过渡动画 */
+  --transition-fast: 120ms ease;
+  --transition-normal: 200ms ease;
+  --transition-slow: 300ms ease;
+
+  /* 聊天相关 */
+  --chat-bg: #fafafa;
+  --chat-bubble-user: #475569;
+  --chat-bubble-user-text: #ffffff;
+  --chat-bubble-assistant: #ffffff;
+  --chat-bubble-assistant-text: #111827;
+  --chat-bubble-assistant-border: #e5e7eb;
+}
+
+/* ============================================================
+   主题 C：苹果极简风
+   Apple.com 风格 — 纯白底色 + 苹果蓝主色 + 极细边框 + 大留白
+   ============================================================ */
+[data-theme="apple"] {
+  /* 基础色彩 */
+  --bg-page: #ffffff;
+  --bg-surface: #ffffff;
+  --bg-surface-hover: #f5f5f7;
+  --bg-input: #ffffff;
+  --bg-input-focus: #ffffff;
+  --bg-badge: #ffffff;
+  --bg-empty: #f5f5f7;
+
+  /* 文字色彩 */
+  --text-primary: #1d1d1f;
+  --text-secondary: #6e6e73;
+  --text-muted: #86868b;
+  --text-placeholder: #d2d2d7;
+  --text-link: #0071e3;
+  --text-on-primary: #ffffff;
+  --text-on-success: #ffffff;
+  --text-on-warning: #1d1d1f;
+  --text-on-danger: #ffffff;
+
+  /* 品牌色彩 — 苹果蓝 */
+  --color-primary: #0071e3;
+  --color-primary-hover: #0077ed;
+  --color-primary-light: rgba(0, 113, 227, 0.06);
+  --color-primary-border: rgba(0, 113, 227, 0.15);
+  --color-success: #34c759;
+  --color-warning: #ff9500;
+  --color-danger: #ff3b30;
+
+  /* 边框与分割线 — 极细 */
+  --border-color: #d2d2d7;
+  --border-radius-sm: 10px;
+  --border-radius-md: 14px;
+  --border-radius-lg: 20px;
+  --border-radius-xl: 28px;
+
+  /* 阴影 — 无阴影，纯边框 */
+  --shadow-card: none;
+  --shadow-card-hover: none;
+  --shadow-card-selected: 0 0 0 2px rgba(0, 113, 227, 0.25);
+  --shadow-header: 0 0 0 1px rgba(0, 0, 0, 0.06);
+  --shadow-input-focus: 0 0 0 3px rgba(0, 113, 227, 0.12);
+  --shadow-batch-bar: 0 0 0 1px rgba(0, 0, 0, 0.08);
+
+  /* 技能标签 — 苹果蓝底白字 */
+  --skill-bg: #0071e3;
+  --skill-text: #ffffff;
+  --skill-border: transparent;
+
+  /* 头像与装饰 */
+  --avatar-bg: #0071e3;
+  --avatar-text: #ffffff;
+  --logo-color: #1d1d1f;
+  --hero-gradient-start: #1d1d1f;
+  --hero-gradient-end: #515154;
+  --hero-text: #1d1d1f;
+  --hero-subtitle: #6e6e73;
+
+  /* 搜索卡片 */
+  --search-bg: #ffffff;
+  --search-border: #d2d2d7;
+  --search-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06);
+
+  /* Tab 样式 */
+  --tab-bg: transparent;
+  --tab-active-bg: #1d1d1f;
+  --tab-active-text: #ffffff;
+  --tab-text: #6e6e73;
+  --tab-border: transparent;
+
+  /* 批量操作栏 */
+  --batch-bg: #ffffff;
+  --batch-shadow: 0 0 0 1px #d2d2d7;
+
+  /* 字体 */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-size-xs: 11px;
+  --font-size-sm: 14px;
+  --font-size-base: 16px;
+  --font-size-lg: 18px;
+  --font-size-xl: 24px;
+  --font-size-2xl: 40px;
+  --font-size-3xl: 56px;
+
+  /* 过渡动画 */
+  --transition-fast: 200ms ease;
+  --transition-normal: 300ms ease;
+  --transition-slow: 400ms ease;
+
+  /* 聊天相关 */
+  --chat-bg: #f5f5f7;
+  --chat-bubble-user: #0071e3;
+  --chat-bubble-user-text: #ffffff;
+  --chat-bubble-assistant: #ffffff;
+  --chat-bubble-assistant-text: #1d1d1f;
+  --chat-bubble-assistant-border: #d2d2d7;
+}
+
+/* ============================================================
+   主题 D：科技深色风
+   深色背景 + 靛蓝渐变 + 微光卡片，突出 AI 科技感
+   ============================================================ */
+[data-theme="tech"] {
+  /* 基础色彩 */
+  --bg-page: #0f172a;
+  --bg-surface: #1e293b;
+  --bg-surface-hover: #263548;
+  --bg-input: #1e293b;
+  --bg-input-focus: #1e293b;
+  --bg-badge: #1e293b;
+  --bg-empty: #1a2332;
+
+  /* 文字色彩 */
+  --text-primary: #f1f5f9;
+  --text-secondary: #cbd5e1;
+  --text-muted: #64748b;
+  --text-placeholder: #475569;
+  --text-link: #818cf8;
+  --text-on-primary: #ffffff;
+  --text-on-success: #ffffff;
+  --text-on-warning: #0f172a;
+  --text-on-danger: #ffffff;
+
+  /* 品牌色彩 — 靛蓝发光 */
+  --color-primary: #6366f1;
+  --color-primary-hover: #818cf8;
+  --color-primary-light: rgba(99, 102, 241, 0.12);
+  --color-primary-border: rgba(99, 102, 241, 0.4);
+  --color-success: #22d3ee;
+  --color-warning: #fbbf24;
+  --color-danger: #f87171;
+
+  /* 边框与分割线 */
+  --border-color: #334155;
+  --border-radius-sm: 6px;
+  --border-radius-md: 10px;
+  --border-radius-lg: 14px;
+  --border-radius-xl: 20px;
+
+  /* 阴影 — 深色发光效果 */
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --shadow-card-hover: 0 4px 16px rgba(99, 102, 241, 0.15), 0 0 0 1px rgba(99, 102, 241, 0.3);
+  --shadow-card-selected: 0 0 0 2px rgba(99, 102, 241, 0.4), 0 0 16px rgba(99, 102, 241, 0.15);
+  --shadow-header: 0 1px 4px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.03);
+  --shadow-input-focus: 0 0 0 3px rgba(99, 102, 241, 0.25);
+  --shadow-batch-bar: 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(99, 102, 241, 0.15);
+
+  /* 技能标签 — 深蓝底 + 浅蓝字 */
+  --skill-bg: #1e3a5f;
+  --skill-text: #60a5fa;
+  --skill-border: rgba(96, 165, 250, 0.25);
+
+  /* 头像与装饰 */
+  --avatar-bg: #6366f1;
+  --avatar-text: #ffffff;
+  --logo-color: #818cf8;
+  --hero-gradient-start: #0f172a;
+  --hero-gradient-end: #1e1b4b;
+  --hero-text: #f1f5f9;
+  --hero-subtitle: #94a3b8;
+
+  /* 搜索卡片 — 深色玻璃 */
+  --search-bg: #1e293b;
+  --search-border: #334155;
+  --search-shadow: 0 4px 16px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(99, 102, 241, 0.1);
+
+  /* Tab 样式 */
+  --tab-bg: transparent;
+  --tab-active-bg: #1e293b;
+  --tab-active-text: #f1f5f9;
+  --tab-text: #64748b;
+  --tab-border: #334155;
+
+  /* 批量操作栏 */
+  --batch-bg: #1e293b;
+  --batch-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(99, 102, 241, 0.15);
+
+  /* 字体 */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-size-xs: 11px;
+  --font-size-sm: 13px;
+  --font-size-base: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 20px;
+  --font-size-2xl: 28px;
+  --font-size-3xl: 36px;
+
+  /* 过渡动画 */
+  --transition-fast: 150ms ease;
+  --transition-normal: 250ms ease;
+  --transition-slow: 350ms ease;
+
+  /* 聊天相关 */
+  --chat-bg: #0f172a;
+  --chat-bubble-user: #6366f1;
+  --chat-bubble-user-text: #ffffff;
+  --chat-bubble-assistant: #1e293b;
+  --chat-bubble-assistant-text: #f1f5f9;
+  --chat-bubble-assistant-border: #334155;
+}
+
+/* ============================================================
+   主题切换动画过渡
+   ============================================================ */
+html {
+  transition: background-color var(--transition-slow), color var(--transition-slow);
+}
+
+/* ============================================================
+   Element Plus 主题覆盖 — 使用 CSS 变量动态绑定
+   这些规则确保 Element Plus 组件跟随当前主题
+   ============================================================ */
+
+/* Element Plus 基础样式覆盖 */
+.el-button--primary {
+  --el-button-bg-color: var(--color-primary) !important;
+  --el-button-border-color: var(--color-primary) !important;
+  --el-button-hover-bg-color: var(--color-primary-hover) !important;
+  --el-button-hover-border-color: var(--color-primary-hover) !important;
+  --el-button-active-bg-color: var(--color-primary-hover) !important;
+}
+
+.el-input__wrapper {
+  --el-input-bg-color: var(--bg-input) !important;
+  --el-input-hover-border-color: var(--color-primary) !important;
+  --el-input-focus-border-color: var(--color-primary) !important;
+  box-shadow: none !important;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md) !important;
+}
+
+.el-input__wrapper.is-focus {
+  box-shadow: var(--shadow-input-focus) !important;
+  border-color: var(--color-primary) !important;
+}
+
+.el-input__inner {
+  color: var(--text-primary) !important;
+}
+
+.el-card {
+  --el-card-border-color: var(--border-color) !important;
+  --el-card-border-radius: var(--border-radius-lg) !important;
+  --el-card-bg-color: var(--bg-surface) !important;
+  border-radius: var(--border-radius-lg) !important;
+  border: 1px solid var(--border-color);
+  transition: box-shadow var(--transition-normal), transform var(--transition-fast), background-color var(--transition-fast);
+}
+
+.el-card:hover {
+  background-color: var(--bg-surface-hover);
+}
+
+.el-card__header {
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.el-table {
+  --el-table-bg-color: var(--bg-surface) !important;
+  --el-table-tr-bg-color: var(--bg-surface) !important;
+  --el-table-header-bg-color: var(--bg-surface-hover) !important;
+  --el-table-row-hover-bg-color: var(--bg-surface-hover) !important;
+  --el-table-border-color: var(--border-color) !important;
+  --el-table-text-color: var(--text-primary) !important;
+  --el-table-header-text-color: var(--text-secondary) !important;
+  --el-table-border: 1px solid var(--border-color) !important;
+}
+
+.el-dialog {
+  --el-dialog-bg-color: var(--bg-surface) !important;
+  --el-dialog-title-text-color: var(--text-primary) !important;
+  border-radius: var(--border-radius-lg);
+}
+
+.el-tabs__item {
+  color: var(--tab-text) !important;
+}
+
+.el-tabs__item.is-active {
+  color: var(--tab-active-text) !important;
+}
+
+.el-pagination {
+  --el-text-color-regular: var(--text-primary) !important;
+  --el-text-color-primary: var(--color-primary) !important;
+}
+
+.el-empty {
+  --el-empty-fill-color-0: var(--text-muted) !important;
+}
+
+/* 全局背景覆盖 */
+body {
+  background: var(--bg-page) !important;
+  color: var(--text-primary) !important;
+}
+
+/* 滚动条美化 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}

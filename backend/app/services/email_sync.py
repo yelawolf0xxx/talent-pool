@@ -38,7 +38,7 @@ def _get_fernet() -> Fernet:
     if not key:
         logger.warning("环境变量 EMAIL_ENCRYPTION_KEY 未设置，使用内置 fallback 密钥（不安全）")
         # 固定 fallback 密钥（仅用于开发环境，生产环境必须设置环境变量）
-        key = "bW9ja19rZXlfZm9yX2RldmVsb3BtZW50X29ubHlfMDEyMzQ1Njc4OQ=="
+        key = "bW9ja19rZXlfZm9yX2Rldl9vbmx5XzEyMzQ1Njc4OTA="
     # Fernet 密钥必须为 32 字节 URL-safe base64 编码
     return Fernet(key.encode() if isinstance(key, str) else key)
 
@@ -226,21 +226,31 @@ def extract_attachments(email_bytes: bytes) -> list[tuple[str, bytes]]:
     return attachments
 
 
-def save_attachment(filename: str, content: bytes, base_dir: str) -> str:
+def save_attachment(filename: str, content: bytes, base_dir: str, user_email: str | None = None) -> str:
     """保存附件到指定目录。
 
     主保存位置为 resume_dir（scanner 自动解析），同时复制到 UNC 备份目录。
+    当提供 user_email 时，保存到 resume_dir/email_{user_email}/YYYY-MM-DD/，
+    以便 scanner 通过路径前缀识别归属用户。
 
     Args:
         filename: 附件文件名。
         content: 附件字节内容。
         base_dir: 基础目录（第一个 resume_dir）。
+        user_email: 用户邮箱地址（可选，用于标识归属）。
 
     Returns:
         保存的完整文件路径。
     """
     today = date.today().isoformat()  # YYYY-MM-DD 格式
-    target_dir = Path(base_dir) / today
+
+    # 如果提供了 user_email，在路径中加入 email_{user_email} 前缀
+    if user_email:
+        # 将 @ 替换为 [at] 以适配路径（如 user@example.com → user[at]example.com）
+        safe_email = user_email.replace("@", "[at]")
+        target_dir = Path(base_dir) / f"email_{safe_email}" / today
+    else:
+        target_dir = Path(base_dir) / today
 
     # 确保目录存在
     try:
@@ -364,7 +374,9 @@ def sync_emails(config_id: int) -> dict:
 
                     for fname, fcontent in attachments:
                         try:
-                            saved_path = save_attachment(fname, fcontent, primary_dir)
+                            saved_path = save_attachment(
+                                fname, fcontent, primary_dir, config.email_address
+                            )
                             result["downloaded"] += 1
                             result["saved_paths"].append(saved_path)
 

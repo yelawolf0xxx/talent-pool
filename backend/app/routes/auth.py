@@ -35,6 +35,7 @@ from app.services.auth import (
     log_operation,
     verify_password,
 )
+from app.services.email_sync import encrypt_password, sync_emails
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["auth"])
@@ -56,6 +57,7 @@ def _email_config_to_dict(cfg: EmailConfig) -> dict:
     """将 EmailConfig 转换为不含密码的响应字典"""
     return {
         "id": cfg.id,
+        "user_id": cfg.user_id,
         "imap_server": cfg.imap_server,
         "imap_port": cfg.imap_port,
         "email_address": cfg.email_address,
@@ -156,6 +158,152 @@ def get_me(current_user: User = Depends(get_current_user)):
 def logout(current_user: User = Depends(get_current_user)):
     """退出登录"""
     return {"message": "退出成功"}
+
+
+# ── 用户端：邮箱配置（需登录，仅限自己的配置）─────────────────
+
+@router.get("/user/email-configs")
+def list_my_email_configs(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """获取当前用户的邮箱配置列表"""
+    configs = (
+        db.query(EmailConfig)
+        .filter(EmailConfig.user_id == current_user.id)
+        .order_by(EmailConfig.id)
+        .all()
+    )
+    return [_email_config_to_dict(c) for c in configs]
+
+
+@router.post("/user/email-configs", response_model=EmailConfigResponse)
+def create_my_email_config(
+    req: EmailConfigRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """创建或更新当前用户的邮箱配置"""
+    existing = db.query(EmailConfig).filter(
+        (EmailConfig.email_address == req.email_address)
+        & (EmailConfig.user_id == current_user.id)
+    ).first()
+
+    if existing:
+        existing.imap_server = req.imap_server
+        existing.imap_port = req.imap_port
+        existing.password_encrypted = encrypt_password(req.password)
+        if req.download_dir is not None:
+            existing.download_dir = req.download_dir
+        existing.is_enabled = True
+        db.commit()
+        db.refresh(existing)
+        log_operation(db, current_user.id, "update_email_config", "email_config", existing.id, "更新邮箱配置")
+        return existing
+    else:
+        new_cfg = EmailConfig(
+            user_id=current_user.id,
+            imap_server=req.imap_server,
+            imap_port=req.imap_port,
+            email_address=req.email_address,
+            password_encrypted=encrypt_password(req.password),
+            download_dir=req.download_dir,
+            is_enabled=True,
+        )
+        db.add(new_cfg)
+        db.commit()
+        db.refresh(new_cfg)
+        log_operation(db, current_user.id, "create_email_config", "email_config", new_cfg.id, "创建邮箱配置")
+        return new_cfg
+
+
+@router.delete("/user/email-configs/{config_id}")
+def delete_my_email_config(
+    config_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """删除当前用户的配置"""
+    cfg = db.query(EmailConfig).filter(
+        (EmailConfig.id == config_id)
+        & (EmailConfig.user_id == current_user.id)
+    ).first()
+    if not cfg:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="配置不存在",
+        )
+    db.delete(cfg)
+    db.commit()
+    log_operation(db, current_user.id, "delete_email_config", "email_config", config_id, "删除邮箱配置")
+    return {"message": "配置已删除"}
+
+
+@router.post("/user/email-sync/{config_id}")
+def sync_my_email_config(
+    config_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """手动触发当前用户的配置同步"""
+    cfg = db.query(EmailConfig).filter(
+        (EmailConfig.id == config_id)
+        & (EmailConfig.user_id == current_user.id)
+    ).first()
+    if not cfg:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="配置不存在",
+        )
+    result = sync_emails(config_id)
+    log_operation(db, current_user.id, "trigger_email_sync", "email_config", config_id, f"手动触发同步: {result}")
+    return result
+
+
+@router.get("/user/email-sync-logs")
+def list_my_email_sync_logs(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """当前用户的同步日志"""
+    # 先获取用户的所有邮箱配置 ID
+    config_ids = (
+        db.query(EmailConfig.id)
+        .filter(EmailConfig.user_id == current_user.id)
+        .subquery()
+    )
+    total = db.query(EmailSyncLog).filter(
+        EmailSyncLog.email_config_id.in_(config_ids)
+    ).count()
+    logs = (
+        db.query(EmailSyncLog)
+        .filter(EmailSyncLog.email_config_id.in_(config_ids))
+        .order_by(EmailSyncLog.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+    return {
+        "total": total,
+        "items": [
+            {
+                "id": log.id,
+                "email_config_id": log.email_config_id,
+                "total_emails": log.total_emails,
+                "new_attachments": log.new_attachments,
+                "downloaded": log.downloaded,
+                "failed": log.failed,
+                "status": log.status,
+                "message": log.message,
+                "created_at": log.created_at,
+            }
+            for log in logs
+        ],
+        "skip": skip,
+        "limit": limit,
+    }
 
 
 # ── 管理员端点（需 Admin）───────────────────────────────
@@ -352,7 +500,7 @@ def create_email_config(
     if existing:
         existing.imap_server = req.imap_server
         existing.imap_port = req.imap_port
-        existing.password_encrypted = get_password_hash(req.password)
+        existing.password_encrypted = encrypt_password(req.password)
         if req.download_dir is not None:
             existing.download_dir = req.download_dir
         db.commit()
@@ -364,7 +512,7 @@ def create_email_config(
             imap_server=req.imap_server,
             imap_port=req.imap_port,
             email_address=req.email_address,
-            password_encrypted=get_password_hash(req.password),
+            password_encrypted=encrypt_password(req.password),
             download_dir=req.download_dir,
             is_enabled=True,
         )

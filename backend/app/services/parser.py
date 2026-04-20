@@ -170,6 +170,7 @@ def parse_resume(db: Session, resume_file: ResumeFile) -> bool:
             skills_json=json.dumps(structured.get("skills", []), ensure_ascii=False),
             work_exp_json=json.dumps(structured.get("work_experience", []), ensure_ascii=False),
             summary_text=structured.get("summary_text"),
+            uploaded_by=resume_file.uploader_id,
         )
         db.add(resume)
 

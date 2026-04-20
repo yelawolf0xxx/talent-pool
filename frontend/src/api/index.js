@@ -173,16 +173,59 @@ export function listEmailSyncLogs(skip = 0, limit = 20) {
   return api.get('/api/admin/email-sync-logs', { params: { skip, limit } })
 }
 
+// ── 用户端：邮箱 API ─────────────────────────────────
+
+/**
+ * 获取当前用户的邮箱配置列表
+ */
+export function listMyEmailConfigs() {
+  return api.get('/api/user/email-configs')
+}
+
+/**
+ * 创建/更新当前用户的邮箱配置
+ * @param {object} data - 配置数据
+ */
+export function createMyEmailConfig(data) {
+  return api.post('/api/user/email-configs', data)
+}
+
+/**
+ * 删除当前用户的邮箱配置
+ * @param {number|string} id - 配置 ID
+ */
+export function deleteMyEmailConfig(id) {
+  return api.delete(`/api/user/email-configs/${id}`)
+}
+
+/**
+ * 手动触发当前用户的邮箱同步
+ * @param {number|string} id - 配置 ID
+ */
+export function syncMyEmailConfig(id) {
+  return api.post(`/api/user/email-sync/${id}`)
+}
+
+/**
+ * 获取当前用户的邮箱同步日志
+ * @param {number} skip - 偏移量
+ * @param {number} limit - 每页数量
+ */
+export function listMyEmailSyncLogs(skip = 0, limit = 20) {
+  return api.get('/api/user/email-sync-logs', { params: { skip, limit } })
+}
+
 // ── 简历 API ──────────────────────────────────────────
 
 /**
  * 获取简历列表（分页）
  * @param {number} skip - 偏移量
  * @param {number} limit - 每页数量
+ * @param {boolean} mine - 仅显示当前用户的简历
  * @returns {Promise<import('axios').AxiosResponse<Resume[]>>}
  */
-export function listResumes(skip = 0, limit = 20) {
-  return api.get('/api/resumes', { params: { skip, limit } })
+export function listResumes(skip = 0, limit = 20, mine = false) {
+  return api.get('/api/resumes', { params: { skip, limit, mine } })
 }
 
 /**
@@ -201,14 +244,15 @@ export function getResume(id) {
  * @param {string} query - 搜索关键词
  * @param {string[]} skills - 技能筛选
  * @param {number|null} minYearsExp - 最低工作年限
+ * @param {boolean} mine - 仅搜索当前用户的简历
  * @returns {Promise<import('axios').AxiosResponse<SearchResponse>>}
  */
-export function searchResumes(query, skills = [], minYearsExp = null) {
+export function searchResumes(query, skills = [], minYearsExp = null, mine = false) {
   return api.post('/api/search', {
     query,
     skills,
     min_years_exp: minYearsExp,
-  })
+  }, { params: { mine } })
 }
 
 /**

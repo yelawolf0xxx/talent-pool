@@ -554,16 +554,16 @@ async function loadEmailSyncLogs(page = 1) {
 
 <style scoped>
 .admin-view {
-  background: #fff;
-  border-radius: 8px;
+  background: var(--bg-surface);
+  border-radius: var(--border-radius-lg);
   padding: 24px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-card);
 }
 
 .admin-title {
   margin: 0 0 20px;
-  font-size: 20px;
-  color: #1a1a2e;
+  font-size: var(--font-size-xl);
+  color: var(--text-primary);
 }
 
 .email-config-header {
@@ -589,11 +589,11 @@ async function loadEmailSyncLogs(page = 1) {
 .status-icon {
   width: 48px;
   height: 48px;
-  border-radius: 12px;
+  border-radius: var(--border-radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
+  color: var(--text-on-primary);
   flex-shrink: 0;
 }
 
@@ -602,14 +602,14 @@ async function loadEmailSyncLogs(page = 1) {
 }
 
 .status-label {
-  font-size: 13px;
-  color: #909399;
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
 }
 
 .status-value {
-  font-size: 20px;
+  font-size: var(--font-size-xl);
   font-weight: 600;
-  color: #1a1a2e;
+  color: var(--text-primary);
   margin-top: 4px;
 }
 </style>

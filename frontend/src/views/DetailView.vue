@@ -246,7 +246,7 @@ async function fetchRecommendation() {
 
 <style scoped>
 .page-title {
-  font-size: 18px;
+  font-size: var(--font-size-xl);
   font-weight: 600;
 }
 
@@ -259,22 +259,25 @@ async function fetchRecommendation() {
 
 .skill-tag {
   margin: 4px;
+  background: var(--skill-bg) !important;
+  color: var(--skill-text) !important;
+  border-color: var(--skill-border) !important;
 }
 
 .empty-text {
-  color: #999;
-  font-size: 13px;
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
   text-align: center;
 }
 
 .desc {
-  color: #666;
-  font-size: 13px;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
   margin: 4px 0 0;
 }
 
 .recommendation p {
-  color: #409eff;
+  color: var(--color-primary);
   line-height: 1.6;
 }
 
@@ -286,14 +289,14 @@ async function fetchRecommendation() {
 
 .conclusion {
   font-weight: 600;
-  font-size: 14px;
+  font-size: var(--font-size-base);
   margin: 8px 0;
-  color: #303133;
+  color: var(--text-primary);
 }
 
 .detail {
-  color: #606266;
-  font-size: 13px;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
   line-height: 1.8;
   margin: 8px 0;
 }
@@ -309,15 +312,15 @@ async function fetchRecommendation() {
 
 .eval-section h4 {
   margin: 0 0 8px;
-  font-size: 14px;
-  color: #303133;
+  font-size: var(--font-size-base);
+  color: var(--text-primary);
   font-weight: 600;
 }
 
 .eval-text {
-  color: #409eff;
+  color: var(--color-primary);
   line-height: 1.8;
-  font-size: 14px;
+  font-size: var(--font-size-base);
   margin: 0;
 }
 
@@ -340,9 +343,9 @@ async function fetchRecommendation() {
 .exp-brief-item {
   display: flex;
   gap: 12px;
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   padding: 4px 0;
-  border-bottom: 1px dashed #ebeef5;
+  border-bottom: 1px dashed var(--border-color);
 }
 
 .exp-brief-item:last-child {
@@ -350,13 +353,13 @@ async function fetchRecommendation() {
 }
 
 .exp-period {
-  color: #909399;
+  color: var(--text-muted);
   white-space: nowrap;
   min-width: 120px;
 }
 
 .exp-role {
-  color: #606266;
+  color: var(--text-secondary);
 }
 
 .edu-list {
@@ -368,17 +371,17 @@ async function fetchRecommendation() {
 .edu-item {
   display: flex;
   gap: 12px;
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   padding: 4px 0;
 }
 
 .edu-school {
-  color: #303133;
+  color: var(--text-primary);
   font-weight: 600;
   white-space: nowrap;
 }
 
 .edu-detail {
-  color: #606266;
+  color: var(--text-secondary);
 }
 </style>

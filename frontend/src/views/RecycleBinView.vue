@@ -22,67 +22,71 @@
     <!-- 回收站内容 -->
     <template v-else>
       <el-empty v-if="items.length === 0" description="回收站为空" />
-      <div v-else class="resume-grid">
-        <el-row :gutter="16">
-          <el-col v-for="item in items" :key="item.id" :xs="24" :sm="12" :md="8">
-            <el-card
-              class="resume-card"
-              shadow="hover"
-              :class="{ selected: selectedIds.includes(item.id) }"
-            >
-              <div class="card-checkbox">
-                <el-checkbox
-                  v-model="selectedIds"
-                  :label="item.id"
-                  @click.stop
-                />
-              </div>
-              <div class="card-content">
-                <div class="card-header">
-                  <el-avatar :size="48" style="background: #909399">
-                    {{ item.name?.charAt(0) || '?' }}
-                  </el-avatar>
-                  <div class="card-info">
-                    <h3>{{ item.name || '未命名' }}</h3>
-                    <p class="title">{{ item.current_title || '职位未知' }}</p>
-                  </div>
-                </div>
-                <div class="card-body">
-                  <el-tag v-if="item.years_exp" size="small">
-                    {{ item.years_exp }}年经验
-                  </el-tag>
-                  <el-tag
-                    v-for="skill in (item.skills || []).slice(0, 4)"
-                    :key="skill"
-                    size="small"
-                    type="info"
-                    style="margin-left: 4px"
-                  >
-                    {{ skill }}
-                  </el-tag>
-                </div>
-                <div class="deleted-info">
-                  <el-icon><Clock /></el-icon>
-                  <span>删除于 {{ formatDate(item.deleted_at) }}</span>
+      <div v-else class="waterfall-container">
+        <div
+          v-for="item in items"
+          :key="item.id"
+          class="waterfall-item"
+        >
+          <el-card
+            class="resume-card"
+            shadow="hover"
+            :class="{ selected: selectedIds.includes(item.id) }"
+          >
+            <div class="card-checkbox">
+              <el-checkbox
+                v-model="selectedIds"
+                :label="item.id"
+                @click.stop
+              >
+                <span style="display:none">{{ item.id }}</span>
+              </el-checkbox>
+            </div>
+            <div class="card-content">
+              <div class="card-header">
+                <el-avatar :size="48" style="background: var(--text-muted); color: var(--text-on-primary)">
+                  {{ item.name?.charAt(0) || '?' }}
+                </el-avatar>
+                <div class="card-info">
+                  <h3>{{ item.name || '未命名' }}</h3>
+                  <p class="title">{{ item.current_title || '职位未知' }}</p>
                 </div>
               </div>
-            </el-card>
-          </el-col>
-        </el-row>
+              <div class="card-body">
+                <el-tag v-if="item.years_exp" size="small" class="skill-tag">
+                  {{ item.years_exp }}年经验
+                </el-tag>
+                <el-tag
+                  v-for="skill in (item.skills || []).slice(0, 4)"
+                  :key="skill"
+                  size="small"
+                  class="skill-tag"
+                >
+                  {{ skill }}
+                </el-tag>
+              </div>
+              <div class="deleted-info">
+                <el-icon><Clock /></el-icon>
+                <span>删除于 {{ formatDate(item.deleted_at) }}</span>
+              </div>
+            </div>
+          </el-card>
+        </div>
       </div>
 
-      <!-- 加载更多 -->
-      <div v-if="hasMore && items.length > 0" class="load-more">
-        <el-button :loading="loadingMore" @click="loadMore">
-          {{ loadingMore ? '加载中...' : '加载更多' }}
-        </el-button>
+      <!-- 无限滚动哨兵 -->
+      <div ref="scrollSentinel" class="scroll-sentinel">
+        <div v-if="loadingMore" class="infinite-loading">
+          <el-icon class="is-loading"><Loading /></el-icon>
+          <span>加载中...</span>
+        </div>
       </div>
     </template>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, nextTick } from 'vue'
 import { listRecycleBin, restoreBatch } from '../api'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
@@ -93,8 +97,12 @@ const loading = ref(true)
 const loadingMore = ref(false)
 const hasMore = ref(true)
 const selectedIds = ref([])
+const scrollSentinel = ref(null)
 
-onMounted(loadFirstPage)
+onMounted(() => {
+  loadFirstPage()
+  initInfiniteScroll()
+})
 
 async function loadFirstPage() {
   loading.value = true
@@ -122,6 +130,26 @@ async function loadMore() {
   } finally {
     loadingMore.value = false
   }
+}
+
+// IntersectionObserver 无限滚动
+let sentinelObserver = null
+
+function initInfiniteScroll() {
+  if (sentinelObserver) sentinelObserver.disconnect()
+  sentinelObserver = new IntersectionObserver(
+    entries => {
+      if (entries[0].isIntersecting && !loadingMore.value && hasMore.value) {
+        loadMore()
+      }
+    },
+    { threshold: 0.1, rootMargin: '200px' }
+  )
+  nextTick(() => {
+    if (scrollSentinel.value) {
+      sentinelObserver.observe(scrollSentinel.value)
+    }
+  })
 }
 
 async function handleBatchRestore() {
@@ -158,13 +186,13 @@ function formatDate(dateStr) {
 }
 
 .page-header h1 {
-  font-size: 32px;
+  font-size: var(--font-size-2xl);
   margin: 0 0 8px;
-  color: #1a1a2e;
+  color: var(--hero-text);
 }
 
 .subtitle {
-  color: #909399;
+  color: var(--text-muted);
   margin: 0 0 24px;
 }
 
@@ -173,29 +201,51 @@ function formatDate(dateStr) {
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
-  background: #fff;
-  border-radius: 8px;
+  background: var(--batch-bg);
+  border-radius: var(--border-radius-md);
   margin-bottom: 16px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--batch-shadow);
 }
 
-.resume-grid {
-  margin-bottom: 24px;
+/* ── 瀑布流容器 ──────────────────────────────────────── */
+.waterfall-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 24px;
+  align-items: start;
+}
+
+.waterfall-item {
+  width: 100%;
+}
+
+.scroll-sentinel {
+  padding: 36px 0;
+}
+
+.infinite-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
 }
 
 .resume-card {
   position: relative;
   cursor: pointer;
-  transition: transform 0.15s;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), background-color var(--transition-fast);
 }
 
 .resume-card:hover {
   transform: translateY(-2px);
+  background-color: var(--bg-surface-hover);
 }
 
 .resume-card.selected {
-  border-color: #409eff;
-  box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.2);
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-card-selected);
 }
 
 .card-checkbox {
@@ -212,40 +262,42 @@ function formatDate(dateStr) {
 .card-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
+  gap: 16px;
+  margin-bottom: 18px;
 }
 
 .card-info h3 {
   margin: 0;
-  font-size: 16px;
+  font-size: var(--font-size-lg);
+  font-weight: 600;
 }
 
 .card-info .title {
-  margin: 4px 0 0;
-  color: #666;
-  font-size: 13px;
+  margin: 6px 0 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
 }
 
 .card-body {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  margin-bottom: 12px;
+  gap: 6px;
+  margin-bottom: 18px;
+}
+
+.skill-tag {
+  background: var(--skill-bg) !important;
+  color: var(--skill-text) !important;
+  border-color: var(--skill-border) !important;
 }
 
 .deleted-info {
   display: flex;
   align-items: center;
   gap: 4px;
-  color: #909399;
-  font-size: 12px;
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
   padding-top: 8px;
-  border-top: 1px solid #f0f0f0;
-}
-
-.load-more {
-  text-align: center;
-  margin-top: 24px;
+  border-top: 1px solid var(--border-color);
 }
 </style>

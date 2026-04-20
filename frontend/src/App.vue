@@ -15,6 +15,9 @@
 
           <!-- 右侧用户区域 -->
           <div class="user-area">
+            <!-- 主题切换 -->
+            <ThemeSwitcher />
+
             <!-- 管理员可见：更新人才库 -->
             <el-button
               v-if="authStore.isAdmin"
@@ -38,6 +41,7 @@
               <span class="user-name">{{ authStore.user?.username || '用户' }}</span>
               <template #dropdown>
                 <el-dropdown-menu>
+                  <el-dropdown-item command="email-config">邮箱管理</el-dropdown-item>
                   <el-dropdown-item v-if="authStore.isAdmin" command="admin">管理后台</el-dropdown-item>
                   <el-dropdown-item command="logout">退出登录</el-dropdown-item>
                 </el-dropdown-menu>
@@ -89,6 +93,7 @@ import { useRouter } from 'vue-router'
 import { manualScan, getScanStatus } from './api'
 import { ElMessage } from 'element-plus'
 import authStore from './stores/auth'
+import ThemeSwitcher from './components/ThemeSwitcher.vue'
 
 const router = useRouter()
 
@@ -115,6 +120,8 @@ let pollTimer = null
 function handleUserCommand(command) {
   if (command === 'admin') {
     router.push('/admin')
+  } else if (command === 'email-config') {
+    router.push('/email-config')
   } else if (command === 'logout') {
     authStore.logout()
   }
@@ -177,8 +184,10 @@ function startPolling() {
 <style>
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background: #f5f7fa;
+  font-family: var(--font-sans);
+  background: var(--bg-page);
+  color: var(--text-primary);
+  transition: background var(--transition-slow), color var(--transition-slow);
 }
 
 .header-content {
@@ -196,7 +205,7 @@ body {
 }
 
 .user-name {
-  color: #409eff;
+  color: var(--color-primary);
   cursor: pointer;
   font-size: 14px;
 }
@@ -207,13 +216,13 @@ body {
   gap: 8px;
   font-size: 20px;
   font-weight: 700;
-  color: #409eff;
+  color: var(--logo-color);
   text-decoration: none;
 }
 
 .el-header {
-  background: #fff;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-header);
   padding: 0 24px;
 }
 
@@ -236,12 +245,12 @@ body {
 .scan-status {
   margin: 12px 0 4px;
   font-size: 14px;
-  color: #303133;
+  color: var(--text-primary);
 }
 
 .scan-detail {
   margin: 4px 0;
   font-size: 13px;
-  color: #909399;
+  color: var(--text-muted);
 }
 </style>

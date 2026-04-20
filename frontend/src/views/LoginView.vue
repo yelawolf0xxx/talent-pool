@@ -133,18 +133,18 @@ async function handleLogin() {
 .auth-title {
   text-align: center;
   margin: 0 0 24px;
-  font-size: 24px;
-  color: #1a1a2e;
+  font-size: var(--font-size-2xl);
+  color: var(--text-primary);
 }
 
 .auth-footer {
   text-align: center;
-  color: #909399;
-  font-size: 14px;
+  color: var(--text-muted);
+  font-size: var(--font-size-base);
 }
 
 .auth-link {
-  color: #409eff;
+  color: var(--text-link);
   text-decoration: none;
 }
 
