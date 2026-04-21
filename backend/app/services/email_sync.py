@@ -420,7 +420,40 @@ def sync_emails(config_id: int) -> dict:
             finally:
                 db.close()
 
+    # 同步完成后，立即触发一次简历扫描（解析新下载的简历）
+    if result["downloaded"] > 0:
+        logger.info("邮箱同步下载了 %d 份简历，触发扫描解析", result["downloaded"])
+        try:
+            _trigger_scan_after_sync()
+        except Exception as exc:
+            logger.error("同步后扫描触发失败: %s", exc)
+
     return result
+
+
+def _trigger_scan_after_sync() -> None:
+    """邮箱同步后触发简历扫描：检测新文件并调用 parse_resume 解析。
+
+    此函数独立执行，不依赖 APScheduler 定时任务，确保邮箱同步下载的简历
+    能尽快被解析并更新至人才库。
+    """
+    from app.models.db import SessionLocal as get_session
+    from app.services.scanner import scan_resume_directory
+    from app.services.parser import parse_resume
+
+    scan_db = get_session()
+    try:
+        new_files = scan_resume_directory(scan_db)
+        for f in new_files:
+            if f.status in ("pending", "failed"):
+                f.status = "processing"
+                scan_db.commit()
+                parse_resume(scan_db, f)
+                logger.info("扫描解析简历: %s", f.file_path)
+    except Exception:
+        logger.exception("同步后扫描异常")
+    finally:
+        scan_db.close()
 
 
 def _write_sync_log(db, config_id: int, result: dict) -> None:

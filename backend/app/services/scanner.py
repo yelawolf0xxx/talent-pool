@@ -65,7 +65,7 @@ def scan_resume_directory(db: Session) -> list[ResumeFile]:
         SUPPORTED_EXTENSIONS = {"*.pdf", "*.doc", "*.docx", "*.ppt", "*.pptx"}
         files = []
         for ext in SUPPORTED_EXTENSIONS:
-            files.extend(dir_path.glob(ext))
+            files.extend(dir_path.rglob(ext))
         logger.info("扫描目录 %s: %d 个简历文件", resume_dir, len(files))
         all_files.extend(files)
 
