@@ -11,6 +11,7 @@ import imaplib
 import email
 import logging
 import os
+import re
 from datetime import datetime, date
 from email.header import decode_header
 from email.message import Message
@@ -541,5 +542,303 @@ def schedule_email_sync() -> dict:
     logger.info("=== 邮件同步完成: 成功 %d, 失败 %d ===",
                 overall["success"], overall["failed"])
     return overall
+
+
+# ── 邮件列表 / 详情查询（管理员实时 IMAP 查询）────────────────
+
+
+def _parse_email_address(raw_from: str) -> str:
+    """解析邮件地址，提取显示名称或邮箱地址。
+
+    处理格式如: "=?UTF-8?B?5byg5LiJ?=<user@example.com>" 或 "user@example.com"。
+    """
+    if not raw_from:
+        return ""
+
+    # 尝试解析 "Name <email>" 格式
+    import re
+    match = re.search(r'<([^>]+)>', raw_from)
+    if match:
+        email_addr = match.group(1)
+        # 提取显示名称部分
+        name_part = raw_from[:match.start()].strip()
+        if name_part:
+            return f"{_decode_header_value(name_part)} <{email_addr}>"
+        return email_addr
+
+    # 纯地址或名称
+    return _decode_header_value(raw_from.strip())
+
+
+def _extract_email_body(msg: Message) -> str:
+    """从邮件消息中提取纯文本正文。
+
+    优先提取 text/plain 部分，如果只有 text/html 则尝试提取纯文本。
+    """
+    body_parts = []
+
+    if msg.is_multipart():
+        for part in msg.walk():
+            content_type = part.get_content_type()
+            if content_type == "text/plain":
+                payload = part.get_payload(decode=True)
+                if payload:
+                    charset = part.get_content_charset() or "utf-8"
+                    body_parts.append(payload.decode(charset, errors="replace"))
+            elif content_type == "text/html" and not body_parts:
+                # 如果有 HTML 但没有纯文本，尝试提取文字
+                payload = part.get_payload(decode=True)
+                if payload:
+                    charset = part.get_content_charset() or "utf-8"
+                    html = payload.decode(charset, errors="replace")
+                    # 简单 HTML 转纯文本：移除标签
+                    text = re.sub(r'<br\s*/?>', '\n', html, flags=re.IGNORECASE)
+                    text = re.sub(r'</p>', '\n', text, flags=re.IGNORECASE)
+                    text = re.sub(r'<[^>]+>', '', text)
+                    text = re.sub(r'\n{3,}', '\n\n', text)
+                    body_parts.append(text.strip())
+    else:
+        content_type = msg.get_content_type()
+        if content_type == "text/plain":
+            payload = msg.get_payload(decode=True)
+            if payload:
+                charset = msg.get_content_charset() or "utf-8"
+                body_parts.append(payload.decode(charset, errors="replace"))
+
+    return "\n\n".join(body_parts) if body_parts else "(无正文内容)"
+
+
+def _get_attachments_list(msg: Message) -> list:
+    """获取邮件附件列表。"""
+    attachments = []
+    for part in msg.walk():
+        if part.get_content_maintype() == "multipart":
+            continue
+        if part.get("Content-Disposition") is None:
+            continue
+
+        filename = part.get_filename()
+        if not filename:
+            continue
+
+        filename = _decode_header_value(filename)
+        size = len(part.get_payload(decode=True) or b"")
+        content_type = part.get_content_type()
+
+        attachments.append({
+            "filename": filename,
+            "size": size,
+            "content_type": content_type,
+        })
+
+    return attachments
+
+
+def list_emails_from_imap(config_id: int, page: int = 1, page_size: int = 20, search: str = "") -> dict:
+    """通过 IMAP 获取邮箱中的邮件列表（分页）。
+
+    Args:
+        config_id: EmailConfig 主键 ID。
+        page: 页码（从 1 开始）。
+        page_size: 每页数量（最大 100）。
+        search: 搜索关键词（匹配主题或发件人）。
+
+    Returns:
+        { total, items: [{ uid, from, subject, date, is_read, attachment_count }] }
+    """
+    from app.models.db import SessionLocal
+    from app.models.auth_models import EmailConfig
+
+    db = SessionLocal()
+    try:
+        config = db.query(EmailConfig).filter(EmailConfig.id == config_id).first()
+        if not config:
+            raise ValueError(f"邮箱配置不存在: id={config_id}")
+
+        page_size = min(page_size, 100)
+        imap_conn = connect_imap(config)
+
+        try:
+            status, _ = imap_conn.select("INBOX", readonly=True)
+            if status != "OK":
+                return {"total": 0, "items": []}
+
+            status, uid_data = imap_conn.search(None, "ALL")
+            if status != "OK" or not uid_data[0]:
+                return {"total": 0, "items": []}
+
+            all_uids = uid_data[0].split()
+            total = len(all_uids)
+
+            # UID 倒序（最新在前）
+            all_uids = all_uids[::-1]
+
+            # 分页切片
+            start = (page - 1) * page_size
+            end = start + page_size
+            page_uids = all_uids[start:end]
+
+            items = []
+            for uid in page_uids:
+                try:
+                    # 获取 FLAGS 和邮件头
+                    status, msg_data = imap_conn.fetch(
+                        uid, "(FLAGS BODY.PEEK[HEADER])"
+                    )
+                    if status != "OK":
+                        continue
+
+                    # msg_data[0] 是 tuple, 包含 FLAGS 和 HEADER
+                    flags_bytes = msg_data[0][0] if isinstance(msg_data[0][0], bytes) else b""
+                    header_bytes = msg_data[0][1] if len(msg_data[0]) > 1 and isinstance(msg_data[0][1], bytes) else b""
+
+                    # 解析 FLAGS
+                    is_read = b"\\Seen" in flags_bytes
+
+                    # 解析邮件头
+                    if header_bytes:
+                        from email.header import decode_header as dh
+                        header_text = header_bytes.decode("utf-8", errors="replace")
+
+                        from_addr = ""
+                        subject = ""
+                        date_str = ""
+
+                        for hdr_line in header_text.split("\r\n"):
+                            low = hdr_line.lower()
+                            if low.startswith("from:"):
+                                raw = hdr_line[5:].strip()
+                                from_addr = _parse_email_address(raw)
+                            elif low.startswith("subject:"):
+                                raw = hdr_line[8:].strip()
+                                subject = _decode_header_value(raw) if raw else ""
+                            elif low.startswith("date:"):
+                                date_str = hdr_line[5:].strip()
+
+                        # 附件数量（快速估算：检查是否有 Content-Type: multipart 以外的 part）
+                        attach_count = 0
+
+                        # 搜索过滤
+                        if search:
+                            s = search.lower()
+                            if s not in subject.lower() and s not in from_addr.lower():
+                                continue
+
+                        items.append({
+                            "uid": uid.decode("utf-8") if isinstance(uid, bytes) else str(uid),
+                            "from": from_addr,
+                            "subject": subject or "(无主题)",
+                            "date": date_str,
+                            "is_read": is_read,
+                            "attachment_count": attach_count,
+                        })
+                except Exception as exc:
+                    logger.warning("获取邮件头失败 uid=%s: %s", uid.decode() if isinstance(uid, bytes) else uid, exc)
+                    continue
+
+            return {"total": total, "items": items}
+
+        finally:
+            try:
+                imap_conn.logout()
+            except Exception:
+                pass
+
+    finally:
+        db.close()
+
+
+def get_email_detail_from_imap(config_id: int, uid: str) -> dict:
+    """通过 IMAP 获取单封邮件详情。
+
+    Args:
+        config_id: EmailConfig 主键 ID。
+        uid: 邮件 UID。
+
+    Returns:
+        { uid, from, subject, date, is_read, body_text, attachments: [...] }
+    """
+    from app.models.db import SessionLocal
+    from app.models.auth_models import EmailConfig
+
+    db = SessionLocal()
+    try:
+        config = db.query(EmailConfig).filter(EmailConfig.id == config_id).first()
+        if not config:
+            raise ValueError(f"邮箱配置不存在: id={config_id}")
+
+        imap_conn = connect_imap(config)
+
+        try:
+            status, _ = imap_conn.select("INBOX", readonly=True)
+            if status != "OK":
+                raise ConnectionError("无法访问 INBOX")
+
+            # 获取完整邮件（BODY.PEEK 不改变已读状态）
+            status, data = imap_conn.fetch(uid, "(BODY.PEEK[] FLAGS)")
+            if status != "OK" or not data[0]:
+                raise ValueError(f"邮件不存在: uid={uid}")
+
+            # 解析 FLAGS
+            response_str = data[0].decode("utf-8", errors="replace")
+            flags_match = __import__('re').search(r'FLAGS \(([^)]*)\)', response_str)
+            is_read = False
+            if flags_match:
+                is_read = "\\Seen" in flags_match.group(1)
+
+            # 解析邮件内容
+            import re
+            msg_match = re.search(r'\* \d+ FETCH .*?\r\n\(.*?RFC822 \{(\d+)\}\r\n', response_str, re.DOTALL)
+            raw_email = None
+            for part in data:
+                if isinstance(part, tuple) and len(part) >= 2:
+                    if isinstance(part[1], bytes):
+                        raw_email = part[1]
+                        break
+
+            if raw_email is None:
+                raw_email = bytes(data[0][1]) if isinstance(data[0][1], (bytes, bytearray)) else None
+
+            if raw_email:
+                msg = email.message_from_bytes(raw_email)
+
+                from_addr = _parse_email_address(msg.get("From", ""))
+                subject = _decode_header_value(msg.get("Subject", "") or "")
+                date_str = msg.get("Date", "")
+                body_text = _extract_email_body(msg)
+                attachments = _get_attachments_list(msg)
+
+                # 截取正文
+                if len(body_text) > 2000:
+                    body_text = body_text[:2000] + "\n\n...（正文过长，已截断）"
+
+                return {
+                    "uid": uid if isinstance(uid, str) else uid.decode("utf-8"),
+                    "from": from_addr,
+                    "subject": subject or "(无主题)",
+                    "date": date_str,
+                    "is_read": is_read,
+                    "body_text": body_text,
+                    "attachments": attachments,
+                }
+            else:
+                return {
+                    "uid": uid if isinstance(uid, str) else uid.decode("utf-8"),
+                    "from": "",
+                    "subject": "(无法解析)",
+                    "date": "",
+                    "is_read": is_read,
+                    "body_text": "(无法解析邮件内容)",
+                    "attachments": [],
+                }
+
+        finally:
+            try:
+                imap_conn.logout()
+            except Exception:
+                pass
+
+    finally:
+        db.close()
 
 

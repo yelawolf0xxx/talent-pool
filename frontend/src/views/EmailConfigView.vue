@@ -118,12 +118,124 @@
           @current-change="loadEmailSyncLogs"
         />
       </el-tab-pane>
+
+      <!-- Tab 3: 全部邮件（仅管理员） -->
+      <el-tab-pane v-if="authStore.isAdmin" label="全部邮件" name="all-emails">
+        <div class="email-list-header">
+          <el-select
+            v-model="selectedEmailConfigId"
+            placeholder="选择邮箱配置"
+            style="width: 280px"
+            @change="onEmailConfigChange"
+          >
+            <el-option
+              v-for="cfg in emailConfigs"
+              :key="cfg.id"
+              :label="cfg.email_address"
+              :value="cfg.id"
+            />
+          </el-select>
+          <el-input
+            v-model="emailSearch"
+            placeholder="搜索主题或发件人"
+            clearable
+            style="width: 240px"
+            @keyup.enter="loadAdminEmails"
+          />
+          <el-button type="primary" :disabled="!selectedEmailConfigId" @click="loadAdminEmails">
+            刷新
+          </el-button>
+        </div>
+
+        <el-table
+          :data="adminEmails"
+          v-loading="emailListLoading"
+          stripe
+          @row-click="openEmailDetail"
+          style="cursor: pointer"
+        >
+          <el-table-column label="状态" width="80">
+            <template #default="{ row }">
+              <span v-if="!row.is_read" class="unread-dot unread" title="未读"></span>
+              <span v-else class="unread-dot read" title="已读"></span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="from" label="发件人" width="220" show-overflow-tooltip />
+          <el-table-column prop="subject" label="主题" min-width="200" show-overflow-tooltip />
+          <el-table-column prop="date" label="日期" width="180">
+            <template #default="{ row }">
+              {{ formatDate(row.date) }}
+            </template>
+          </el-table-column>
+        </el-table>
+
+        <el-empty v-if="!emailListLoading && adminEmails.length === 0" :description="selectedEmailConfigId ? '暂无邮件' : '请先选择邮箱配置'" />
+
+        <el-pagination
+          v-if="adminEmailTotal > emailListPageSize"
+          :current-page="emailListPage"
+          :page-size="emailListPageSize"
+          :total="adminEmailTotal"
+          layout="total, prev, pager, next"
+          style="margin-top: 16px; justify-content: center"
+          @current-change="loadAdminEmails"
+        />
+      </el-tab-pane>
     </el-tabs>
+
+    <!-- 邮件详情弹窗 -->
+    <el-dialog
+      v-model="emailDetailVisible"
+      :title="emailDetail?.subject || '邮件详情'"
+      width="700px"
+    >
+      <div v-if="emailDetail" class="email-detail">
+        <div class="email-detail-header">
+          <div class="email-meta">
+            <span class="meta-label">发件人：</span>
+            <span class="meta-value">{{ emailDetail.from }}</span>
+          </div>
+          <div class="email-meta">
+            <span class="meta-label">日期：</span>
+            <span class="meta-value">{{ formatDate(emailDetail.date) }}</span>
+          </div>
+          <div class="email-meta">
+            <span class="meta-label">状态：</span>
+            <el-tag :type="emailDetail.is_read ? 'info' : 'danger'" size="small">
+              {{ emailDetail.is_read ? '已读' : '未读' }}
+            </el-tag>
+          </div>
+        </div>
+
+        <!-- 附件列表 -->
+        <div v-if="emailDetail.attachments && emailDetail.attachments.length > 0" class="email-attachments">
+          <h4 class="attachment-title">附件（{{ emailDetail.attachments.length }}）</h4>
+          <el-table :data="emailDetail.attachments" size="small" border>
+            <el-table-column prop="filename" label="文件名" min-width="200" show-overflow-tooltip />
+            <el-table-column label="大小" width="100">
+              <template #default="{ row }">
+                {{ formatFileSize(row.size) }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="content_type" label="类型" width="150" />
+          </el-table>
+        </div>
+
+        <!-- 正文预览 -->
+        <div class="email-body">
+          <h4 class="body-title">正文预览</h4>
+          <pre class="body-content">{{ emailDetail.body_text }}</pre>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="emailDetailVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   listMyEmailConfigs,
@@ -131,7 +243,10 @@ import {
   deleteMyEmailConfig,
   syncMyEmailConfig,
   listMyEmailSyncLogs,
+  listAdminEmails,
+  getAdminEmailDetail,
 } from '../api'
+import authStore from '../stores/auth'
 
 const activeTab = ref('configs')
 
@@ -306,6 +421,70 @@ function getStatusText(status) {
   const map = { success: '成功', failed: '失败', partial: '部分成功' }
   return map[status] || status
 }
+
+// ── 全部邮件（仅管理员）────────────────────────────────
+
+const selectedEmailConfigId = ref(null)
+const emailSearch = ref('')
+const adminEmails = ref([])
+const emailListLoading = ref(false)
+const emailListPage = ref(1)
+const emailListPageSize = 20
+const adminEmailTotal = ref(0)
+const emailDetailVisible = ref(false)
+const emailDetail = ref(null)
+const emailDetailLoading = ref(false)
+
+function onEmailConfigChange() {
+  emailListPage.value = 1
+  emailSearch.value = ''
+  loadAdminEmails()
+}
+
+async function loadAdminEmails(page = 1) {
+  if (!selectedEmailConfigId.value) return
+
+  emailListPage.value = page
+  emailListLoading.value = true
+  try {
+    const { data } = await listAdminEmails(
+      selectedEmailConfigId.value,
+      page,
+      emailListPageSize,
+      emailSearch.value,
+    )
+    adminEmails.value = data.items || []
+    adminEmailTotal.value = data.total || 0
+  } catch (e) {
+    ElMessage.error('加载邮件列表失败：' + (e.response?.data?.detail || e.message))
+    adminEmails.value = []
+  } finally {
+    emailListLoading.value = false
+  }
+}
+
+async function openEmailDetail(row) {
+  emailDetailLoading.value = true
+  emailDetailVisible.value = true
+  emailDetail.value = null
+  try {
+    const { data } = await getAdminEmailDetail(
+      selectedEmailConfigId.value,
+      row.uid,
+    )
+    emailDetail.value = data
+  } catch (e) {
+    ElMessage.error('加载邮件详情失败：' + (e.response?.data?.detail || e.message))
+  } finally {
+    emailDetailLoading.value = false
+  }
+}
+
+function formatFileSize(bytes) {
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+}
 </script>
 
 <style scoped>
@@ -333,5 +512,78 @@ function getStatusText(status) {
   margin-bottom: 16px;
   display: flex;
   gap: 8px;
+}
+
+.email-list-header {
+  margin-bottom: 16px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.unread-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.unread-dot.unread {
+  background: var(--color-primary, #409eff);
+}
+
+.unread-dot.read {
+  background: #c0c4cc;
+}
+
+.email-detail-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.email-meta {
+  font-size: var(--font-size-sm);
+}
+
+.meta-label {
+  color: var(--text-muted);
+  margin-right: 4px;
+}
+
+.meta-value {
+  color: var(--text-primary);
+}
+
+.email-attachments {
+  margin-bottom: 16px;
+}
+
+.attachment-title,
+.body-title {
+  margin: 0 0 8px;
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.email-body {
+  margin-top: 16px;
+}
+
+.body-content {
+  background: var(--bg-surface-hover, #f5f7fa);
+  border: 1px solid var(--border-color, #ebeef5);
+  border-radius: 4px;
+  padding: 12px 16px;
+  font-size: var(--font-size-sm);
+  line-height: 1.6;
+  max-height: 400px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-primary);
+  margin: 0;
 }
 </style>

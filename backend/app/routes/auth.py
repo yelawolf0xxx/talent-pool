@@ -563,6 +563,36 @@ def trigger_email_sync(
     return result
 
 
+# ── 管理员：邮件列表 / 详情（实时 IMAP 查询）─────────────────
+
+@router.get("/admin/emails")
+def list_emails(
+    config_id: int = Query(..., description="邮箱配置 ID"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    search: str = Query("", description="搜索关键词"),
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """获取指定邮箱的邮件列表（实时 IMAP 查询）"""
+    from app.services.email_sync import list_emails_from_imap
+    result = list_emails_from_imap(config_id, page, page_size, search)
+    return result
+
+
+@router.get("/admin/emails/{uid}")
+def get_email_detail(
+    config_id: int = Query(..., description="邮箱配置 ID"),
+    uid: str = Query(..., description="邮件 UID"),
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """获取单封邮件详情（实时 IMAP 查询）"""
+    from app.services.email_sync import get_email_detail_from_imap
+    result = get_email_detail_from_imap(config_id, uid)
+    return result
+
+
 @router.get("/admin/email-sync-logs")
 def list_email_sync_logs(
     skip: int = Query(0, ge=0),

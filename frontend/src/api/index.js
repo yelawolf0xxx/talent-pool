@@ -173,6 +173,28 @@ export function listEmailSyncLogs(skip = 0, limit = 20) {
   return api.get('/api/admin/email-sync-logs', { params: { skip, limit } })
 }
 
+// ── 管理员：邮件列表 API ──────────────────────────────
+
+/**
+ * 获取指定邮箱的邮件列表（实时 IMAP 查询）
+ * @param {number} configId - 邮箱配置 ID
+ * @param {number} page - 页码
+ * @param {number} pageSize - 每页数量
+ * @param {string} search - 搜索关键词
+ */
+export function listAdminEmails(configId, page = 1, pageSize = 20, search = '') {
+  return api.get('/api/admin/emails', { params: { config_id: configId, page, page_size: pageSize, search } })
+}
+
+/**
+ * 获取单封邮件详情（实时 IMAP 查询）
+ * @param {number} configId - 邮箱配置 ID
+ * @param {string} uid - 邮件 UID
+ */
+export function getAdminEmailDetail(configId, uid) {
+  return api.get(`/api/admin/emails/${uid}`, { params: { config_id: configId } })
+}
+
 // ── 用户端：邮箱 API ─────────────────────────────────
 
 /**
