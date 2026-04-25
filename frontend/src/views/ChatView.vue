@@ -266,3 +266,39 @@ async function sendMessage() {
   padding: 0;
 }
 </style>
+
+<!-- 毛玻璃主题专属覆盖 -->
+<style>
+[data-theme="glass"] .chat-view .el-card {
+  background: rgba(255, 255, 255, 0.30) !important;
+  backdrop-filter: blur(16px) saturate(1.3);
+  -webkit-backdrop-filter: blur(16px) saturate(1.3);
+}
+
+[data-theme="glass"] .chat-container {
+  background: transparent !important;
+}
+
+[data-theme="glass"] .message.user .bubble {
+  background: var(--chat-bubble-user) !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+}
+
+[data-theme="glass"] .message.assistant .bubble {
+  background: var(--chat-bubble-assistant) !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+[data-theme="glass"] .header {
+  font-weight: 400 !important;
+}
+
+[data-theme="glass"] .guide-card .el-card {
+  background: rgba(255, 255, 255, 0.25) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+</style>

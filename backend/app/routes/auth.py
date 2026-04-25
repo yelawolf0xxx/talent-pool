@@ -4,7 +4,7 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
@@ -583,7 +583,7 @@ def list_emails(
 @router.get("/admin/emails/{uid}")
 def get_email_detail(
     config_id: int = Query(..., description="邮箱配置 ID"),
-    uid: str = Query(..., description="邮件 UID"),
+    uid: str = Path(..., description="邮件 UID"),
     admin_user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):

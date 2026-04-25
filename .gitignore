@@ -10,6 +10,7 @@ __pycache__/
 dist/
 .venv/
 venv/
+*.log
 
 # Node
 frontend/node_modules/
@@ -26,3 +27,7 @@ data/
 # OS
 .DS_Store
 Thumbs.db
+
+# Local
+restart.bat
+resumes/

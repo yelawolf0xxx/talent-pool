@@ -443,6 +443,9 @@ function onEmailConfigChange() {
 
 async function loadAdminEmails(page = 1) {
   if (!selectedEmailConfigId.value) return
+  if (typeof page !== 'number') {
+    page = 1
+  }
 
   emailListPage.value = page
   emailListLoading.value = true
@@ -585,5 +588,26 @@ function formatFileSize(bytes) {
   word-break: break-word;
   color: var(--text-primary);
   margin: 0;
+}
+</style>
+
+<!-- 毛玻璃主题专属覆盖 -->
+<style>
+[data-theme="glass"] .email-config-view {
+  background: rgba(255, 255, 255, 0.25) !important;
+  backdrop-filter: blur(16px) saturate(1.3);
+  -webkit-backdrop-filter: blur(16px) saturate(1.3);
+}
+
+[data-theme="glass"] .view-title {
+  font-weight: 300 !important;
+  letter-spacing: -0.01em;
+}
+
+[data-theme="glass"] .body-content {
+  background: rgba(255, 255, 255, 0.20) !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
 }
 </style>

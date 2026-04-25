@@ -16,6 +16,9 @@
         <el-button type="primary" @click="uploadRef?.click()">
           <el-icon><Upload /></el-icon> 上传简历
         </el-button>
+        <el-button @click="$router.push('/manual')">
+          <el-icon><Document /></el-icon> 用户手册
+        </el-button>
       </div>
 
       <el-card class="search-card">
@@ -688,5 +691,45 @@ async function handleFileSelect(event) {
   color: var(--text-muted);
   font-size: var(--font-size-sm);
   margin-bottom: 8px;
+}
+</style>
+
+<!-- 毛玻璃主题专属覆盖 -->
+<style>
+[data-theme="glass"] .search-hero h1 {
+  font-size: var(--font-size-3xl) !important;
+  font-weight: 300 !important;
+  letter-spacing: -0.02em;
+}
+
+[data-theme="glass"] .subtitle {
+  font-weight: 300 !important;
+  letter-spacing: 0.01em;
+}
+
+[data-theme="glass"] .search-card .el-card {
+  background: rgba(255, 255, 255, 0.35) !important;
+  backdrop-filter: blur(20px) saturate(1.5);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5);
+}
+
+[data-theme="glass"] .waterfall-item .el-card {
+  background: rgba(255, 255, 255, 0.30) !important;
+  backdrop-filter: blur(16px) saturate(1.3);
+  -webkit-backdrop-filter: blur(16px) saturate(1.3);
+}
+
+[data-theme="glass"] .resume-card:hover {
+  transform: translateY(-8px) scale(1.01);
+}
+
+[data-theme="glass"] .card-info h3 {
+  font-weight: 500 !important;
+}
+
+[data-theme="glass"] .batch-actions {
+  background: rgba(255, 255, 255, 0.35) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 }
 </style>

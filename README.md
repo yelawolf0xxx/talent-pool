@@ -861,6 +861,75 @@ npm run dev
 npm run build
 ```
 
+## 部署到 Linux 服务器
+
+### 一键部署（推荐）
+
+适用于 Ubuntu 24.04 LTS 服务器。将整个项目上传到服务器后执行：
+
+```bash
+cd /path/to/talent-pool/deploy
+sudo bash deploy.sh
+```
+
+脚本自动完成以下 8 个步骤：
+
+| 步骤 | 内容 |
+|------|------|
+| 1 | 安装系统依赖 (MySQL, Python 3.12, Node.js, Nginx) |
+| 2 | 创建数据库和用户 |
+| 3 | 创建部署目录 (`/opt/talent-pool/`) |
+| 4 | 同步后端代码 |
+| 5 | 创建 Python 虚拟环境 + 安装依赖 |
+| 6 | 生成 `.env` 配置文件 |
+| 7 | 构建前端静态文件 |
+| 8 | 配置 Nginx 反向代理 + systemd 服务 + 健康检查 |
+
+脚本执行完毕后输出数据库密码和需要手动填写的 AI 配置项。
+
+### 代码变更后重新部署
+
+```bash
+cd /path/to/talent-pool/deploy
+sudo bash redeploy.sh
+```
+
+自动完成：同步后端代码 → 重新构建前端 → 重启后端服务 → 重载 Nginx。
+
+### 服务器目录结构
+
+```
+/opt/talent-pool/
+├── backend/              # FastAPI 代码
+│   ├── .venv/            # Python 虚拟环境
+│   ├── .env              # 生产配置（需手动编辑 AI 密钥）
+│   └── app/
+├── frontend-dist/        # 前端构建产物
+├── resumes/              # PDF 简历存储
+├── data/chroma_db/       # ChromaDB 向量数据
+└── deploy/               # 部署脚本
+```
+
+### 常用运维命令
+
+```bash
+# 查看服务状态
+systemctl status talent-pool
+
+# 查看服务日志
+journalctl -u talent-pool -f
+
+# 重启服务
+systemctl restart talent-pool
+
+# 重载 Nginx
+systemctl reload nginx
+
+# Nginx 日志
+tail -f /var/log/nginx/access.log
+tail -f /var/log/nginx/error.log
+```
+
 ### 访问应用
 
 - 前端界面: `http://localhost:3000`

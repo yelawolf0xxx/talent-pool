@@ -4,7 +4,7 @@
 import { ref, onMounted } from 'vue'
 
 const STORAGE_KEY = 'app_theme'
-const VALID_THEMES = ['business', 'minimal', 'apple', 'tech']
+const VALID_THEMES = ['business', 'minimal', 'apple', 'tech', 'glass']
 
 // 默认主题
 const DEFAULT_THEME = 'business'

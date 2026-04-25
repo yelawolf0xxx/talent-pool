@@ -613,3 +613,17 @@ async function loadEmailSyncLogs(page = 1) {
   margin-top: 4px;
 }
 </style>
+
+<!-- 毛玻璃主题专属覆盖 -->
+<style>
+[data-theme="glass"] .admin-view {
+  background: rgba(255, 255, 255, 0.25) !important;
+  backdrop-filter: blur(16px) saturate(1.3);
+  -webkit-backdrop-filter: blur(16px) saturate(1.3);
+}
+
+[data-theme="glass"] .admin-title {
+  font-weight: 300 !important;
+  letter-spacing: -0.01em;
+}
+</style>

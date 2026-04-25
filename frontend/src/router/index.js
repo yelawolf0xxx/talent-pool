@@ -51,6 +51,12 @@ const routes = [
     component: () => import('../views/EmailTutorialView.vue'),
     meta: { requiresAuth: true },
   },
+  {
+    path: '/manual',
+    name: 'Manual',
+    component: () => import('../views/ManualView.vue'),
+    meta: { requiresAuth: true },
+  },
 ]
 
 const router = createRouter({

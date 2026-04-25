@@ -301,3 +301,27 @@ function formatDate(dateStr) {
   border-top: 1px solid var(--border-color);
 }
 </style>
+
+<!-- 毛玻璃主题专属覆盖 -->
+<style>
+[data-theme="glass"] .page-header h1 {
+  font-weight: 300 !important;
+  letter-spacing: -0.02em;
+}
+
+[data-theme="glass"] .recycle-bin-view .el-card {
+  background: rgba(255, 255, 255, 0.30) !important;
+  backdrop-filter: blur(16px) saturate(1.3);
+  -webkit-backdrop-filter: blur(16px) saturate(1.3);
+}
+
+[data-theme="glass"] .resume-card:hover {
+  transform: translateY(-8px) scale(1.01);
+}
+
+[data-theme="glass"] .batch-actions {
+  background: rgba(255, 255, 255, 0.35) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+</style>

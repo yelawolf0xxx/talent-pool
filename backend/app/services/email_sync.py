@@ -779,25 +779,21 @@ def get_email_detail_from_imap(config_id: int, uid: str) -> dict:
             if status != "OK" or not data[0]:
                 raise ValueError(f"邮件不存在: uid={uid}")
 
-            # 解析 FLAGS
-            response_str = data[0].decode("utf-8", errors="replace")
-            flags_match = __import__('re').search(r'FLAGS \(([^)]*)\)', response_str)
+            # 解析 FLAGS 和邮件内容
+            # IMAP fetch 返回格式: [(b'1 (FLAGS (\\Seen) BODY[] {1234}', b'<raw email>'), b')']
+            import re
+            response_tuple = data[0]
+            if isinstance(response_tuple, tuple):
+                response_str = response_tuple[0].decode("utf-8", errors="replace") if isinstance(response_tuple[0], bytes) else ""
+                raw_email = response_tuple[1] if len(response_tuple) > 1 and isinstance(response_tuple[1], bytes) else None
+            else:
+                response_str = response_tuple.decode("utf-8", errors="replace") if isinstance(response_tuple, bytes) else ""
+                raw_email = None
+
+            flags_match = re.search(r'FLAGS \(([^)]*)\)', response_str)
             is_read = False
             if flags_match:
                 is_read = "\\Seen" in flags_match.group(1)
-
-            # 解析邮件内容
-            import re
-            msg_match = re.search(r'\* \d+ FETCH .*?\r\n\(.*?RFC822 \{(\d+)\}\r\n', response_str, re.DOTALL)
-            raw_email = None
-            for part in data:
-                if isinstance(part, tuple) and len(part) >= 2:
-                    if isinstance(part[1], bytes):
-                        raw_email = part[1]
-                        break
-
-            if raw_email is None:
-                raw_email = bytes(data[0][1]) if isinstance(data[0][1], (bytes, bytearray)) else None
 
             if raw_email:
                 msg = email.message_from_bytes(raw_email)

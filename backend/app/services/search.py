@@ -38,16 +38,32 @@ def _to_response(r: Resume) -> ResumeResponse:
 def _match_reasons(resume: Resume, query: str) -> list[str]:
     """生成匹配原因说明"""
     reasons = []
-    if resume.name and query.lower() in (resume.name or "").lower():
-        reasons.append(f"姓名匹配「{query}」")
-    if resume.current_title and query.lower() in (resume.current_title or "").lower():
-        reasons.append(f"职位「{resume.current_title}」与搜索相关")
-    if resume.skills_json:
-        skills = json.loads(resume.skills_json)
-        matched = [s for s in skills if query.lower() in s.lower()]
-        if matched:
-            reasons.append(f"技能匹配: {', '.join(matched)}")
+    tokens = _parse_query_tokens(query) if query.strip() else [query]
+    for token in tokens:
+        token_lower = token.lower()
+        if resume.name and token_lower == (resume.name or "").lower():
+            reasons.append(f"姓名精确匹配「{token}」")
+        elif resume.name and token_lower in (resume.name or "").lower():
+            reasons.append(f"姓名包含「{token}」")
+        if resume.current_title and token_lower in (resume.current_title or "").lower():
+            reasons.append(f"职位「{resume.current_title}」与搜索相关")
+        if resume.skills_json:
+            skills = json.loads(resume.skills_json)
+            matched = [s for s in skills if token_lower in s.lower()]
+            if matched:
+                reasons.append(f"技能匹配: {', '.join(matched)}")
     return reasons
+
+
+def _is_name_like_query(query: str) -> bool:
+    """判断搜索词是否像人名：短词（≤4字符）、不含空格、无特殊符号"""
+    q = query.strip()
+    return len(q) <= 4 and ' ' not in q and q.isalpha()
+
+
+def _parse_query_tokens(query: str) -> list[str]:
+    """将搜索词按空格拆分为多个 token"""
+    return [t.strip() for t in query.strip().split() if t.strip()]
 
 
 def search_resumes(db: Session, query: str, skills: Optional[list[str]] = None,
@@ -55,7 +71,10 @@ def search_resumes(db: Session, query: str, skills: Optional[list[str]] = None,
     """
     混合搜索简历：SQL 关键词搜索 + ChromaDB 语义搜索混合排序。
 
-    最终结果按加权分数排序。
+    特殊处理：
+    - 当搜索词像人名（短词、无空格）且精确匹配姓名时，该简历置顶
+    - 人名模式下仅返回姓名精确匹配的结果
+    - 多词搜索时每个 token 独立计分
     """
     all_resumes = db.query(Resume).filter(Resume.is_deleted == False).all()
 
@@ -87,23 +106,61 @@ def search_resumes(db: Session, query: str, skills: Optional[list[str]] = None,
     if not filtered:
         return []
 
-    # 1. 关键词搜索得分（SQL LIKE）
+    # ── 判断是否为"人名搜索"模式 ──────────────────
+    is_name_query = _is_name_like_query(query)
+    # 在人名模式下，先尝试精确匹配姓名
+    exact_name_matches = []
+    if is_name_query:
+        for r in filtered:
+            if r.name and query.strip().lower() == r.name.lower():
+                exact_name_matches.append(r)
+        if exact_name_matches:
+            # 人名精确命中 → 仅返回姓名匹配的简历，不参与混合排序
+            results = []
+            for r in exact_name_matches:
+                results.append(SearchResultItem(
+                    resume=_to_response(r),
+                    score=1.0,
+                    match_reasons=[f"姓名精确匹配「{query.strip()}」"],
+                ))
+            return results
+
+    # ── 1. 关键词搜索得分 ────────────────────────
     keyword_scores = {}
     if query.strip():
-        like_pattern = f"%{query.lower()}%"
+        tokens = _parse_query_tokens(query)
         for r in filtered:
             score = 0.0
-            if r.name and query.lower() in (r.name or "").lower():
-                score += 0.5
-            if r.current_title and query.lower() in (r.current_title or "").lower():
-                score += 0.3
-            if r.summary_text and query.lower() in (r.summary_text or "").lower():
-                score += 0.2
-            if r.skills_json and query.lower() in (r.skills_json or "").lower():
-                score += 0.3
+            if tokens:
+                for token in tokens:
+                    token_lower = token.lower()
+                    # 姓名精确匹配（整个 token 完全匹配）
+                    if r.name and token_lower == (r.name or "").lower():
+                        score += 1.0
+                    # 姓名模糊匹配（子串）
+                    elif r.name and token_lower in (r.name or "").lower():
+                        score += 0.7
+                    if r.current_title and token_lower in (r.current_title or "").lower():
+                        score += 0.3
+                    if r.summary_text and token_lower in (r.summary_text or "").lower():
+                        score += 0.1
+                    if r.skills_json and token_lower in (r.skills_json or "").lower():
+                        score += 0.3
             keyword_scores[r.id] = min(score, 1.0)
 
-    # 2. 语义搜索得分（向量不可用时降级为空）
+    # ── 2. 语义搜索得分 ──────────────────────────
+    has_name_hit = any(
+        keyword_scores.get(r.id, 0.0) >= 0.7 for r in filtered
+    )
+
+    # 如果命中了姓名，降低语义权重；否则保持默认比例
+    if has_name_hit:
+        sem_weight = 0.1
+        kw_weight = 0.9
+    else:
+        sem_weight = SEMANTIC_WEIGHT
+        kw_weight = KEYWORD_WEIGHT
+
     try:
         semantic_ids = set(semantic_search(query, n_results=50))
     except Exception:
@@ -111,19 +168,17 @@ def search_resumes(db: Session, query: str, skills: Optional[list[str]] = None,
         semantic_ids = set()
     semantic_scores = {}
     for i, rid in enumerate(semantic_ids):
-        # 排名越靠前分数越高
         semantic_scores[rid] = 1.0 - (i / len(semantic_ids)) if semantic_ids else 0.0
 
-    # 3. 混合排序
+    # ── 3. 混合排序 ──────────────────────────────
     results = []
     has_query = bool(query.strip())
     for r in filtered:
         kw_score = keyword_scores.get(r.id, 0.0)
         sem_score = semantic_scores.get(r.id, 0.0)
-        # 无关键词查询时（纯筛选），直接使用筛选结果
         if has_query and kw_score == 0 and sem_score == 0:
             continue
-        combined = kw_score * KEYWORD_WEIGHT + sem_score * SEMANTIC_WEIGHT if has_query else 0.0
+        combined = kw_score * kw_weight + sem_score * sem_weight if has_query else 0.0
         results.append(SearchResultItem(
             resume=_to_response(r),
             score=round(combined, 3),

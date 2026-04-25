@@ -152,3 +152,18 @@ async function handleLogin() {
   text-decoration: underline;
 }
 </style>
+
+<!-- 毛玻璃主题专属覆盖 -->
+<style>
+[data-theme="glass"] .auth-card {
+  background: rgba(255, 255, 255, 0.35) !important;
+  backdrop-filter: blur(24px) saturate(1.8);
+  -webkit-backdrop-filter: blur(24px) saturate(1.8);
+  border: 1px solid rgba(255, 255, 255, 0.25) !important;
+}
+
+[data-theme="glass"] .auth-title {
+  font-weight: 300 !important;
+  letter-spacing: -0.02em;
+}
+</style>

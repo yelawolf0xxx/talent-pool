@@ -385,3 +385,38 @@ async function fetchRecommendation() {
   color: var(--text-secondary);
 }
 </style>
+
+<!-- 毛玻璃主题专属覆盖 -->
+<style>
+[data-theme="glass"] .detail-view .el-card {
+  background: rgba(255, 255, 255, 0.30) !important;
+  backdrop-filter: blur(16px) saturate(1.3);
+  -webkit-backdrop-filter: blur(16px) saturate(1.3);
+}
+
+[data-theme="glass"] .page-title {
+  font-weight: 300 !important;
+  letter-spacing: -0.01em;
+}
+
+[data-theme="glass"] .detail-view .el-descriptions {
+  background: transparent !important;
+}
+
+[data-theme="glass"] .detail-view .el-descriptions__label,
+[data-theme="glass"] .detail-view .el-descriptions__content {
+  background: transparent !important;
+}
+
+[data-theme="glass"] .detail-view .el-timeline-item__timestamp {
+  color: var(--text-muted) !important;
+}
+
+[data-theme="glass"] .detail-view h4 {
+  font-weight: 500 !important;
+}
+
+[data-theme="glass"] .recommendation p {
+  color: var(--text-secondary) !important;
+}
+</style>

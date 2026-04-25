@@ -16,7 +16,7 @@
           <!-- 右侧用户区域 -->
           <div class="user-area">
             <!-- 主题切换 -->
-            <ThemeSwitcher />
+            <ThemeSwitcher v-if="authStore.isAdmin" />
 
             <!-- 管理员可见：更新人才库 -->
             <el-button
